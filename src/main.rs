@@ -53,7 +53,7 @@ const PROCID_ACCEPT_LOOP: usize = 0;
 const PROCID_BROADCAST_PEERS: usize = 1;
 const PROCID_GENERATOR: usize = 2;
 const PROCID_PEERS: usize = 3;
-const LISTEN: &str = "127.0.0.1:8080";
+const LISTEN: &str = "0.0.0.0:8008";
 
 lazy_static! {
     static ref DB_RWLOCK: Arc<RwLock<Storage>> = Arc::new(RwLock::new(Storage::default()));
@@ -86,7 +86,7 @@ async fn main() -> AnyResult<()> {
         read_patchwork_config(&mut file).await?
     };
 
-    println!("Server started on {}:{}", LISTEN, server_id.id);
+    println!("Server started on {}:{}", LISTEN, base64::encode(&server_id.pk[..]));
 
     DB_RWLOCK.write().await.open(&db_folder)?;
 
@@ -133,7 +133,8 @@ async fn proc_generate_info(mut msgloop: MsgSender, server_id: OwnedIdentity) ->
                 None
               };
 
-              let post = Post::new("test1".to_string(), None).to_msg()?;
+              let markdown = format!("Temperature at {:?}",std::time::SystemTime::now()); 
+              let post = Post::new(markdown, None).to_msg()?;
               let msg = Message::sign(last_msg.as_ref(), &server_id, post)?;
               let next_id = db.append_feed(msg)?;
 
