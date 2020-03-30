@@ -1,10 +1,17 @@
 use kuska_ssb::feed::{Feed, Message};
 use serde::{Deserialize, Serialize};
 use serde_cbor;
+use async_std::{
+    sync::{Arc, RwLock},
+};
 
 const PREFIX_LASTFEED: u8 = 0u8;
 const PREFIX_FEED: u8 = 1u8;
 const PREFIX_MESSAGE: u8 = 2u8;
+
+lazy_static! {
+    pub static ref DB: Arc<RwLock<Storage>> = Arc::new(RwLock::new(Storage::default()));
+}
 
 pub struct Storage {
     db: Option<sled::Db>,
