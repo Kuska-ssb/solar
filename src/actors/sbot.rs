@@ -1,4 +1,4 @@
-use std::{string::ToString};
+use std::string::ToString;
 
 use async_std::{
     io::{Read, Write},
@@ -16,49 +16,40 @@ use kuska_ssb::{
     rpc::{RecvMsg, RpcStream},
 };
 
-use crate::storage::DB;
 use crate::registry::*;
+use crate::storage::DB;
 
-const ACTOR_ACCEPT_LOOP: usize = 0;
-const ACTOR_PEERS: usize = 3;
+pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> AnyResult<()> {
+    let reg = REGISTRY.lock().await.register("sbot").await?;
 
-pub async fn actor(
-    mut registry_ch: RegistryCh,
-    server_id: OwnedIdentity,
-    addr: impl ToSocketAddrs,
-) -> AnyResult<()> {
-    let (terminate, terminated) = Registry::register(&mut registry_ch, ACTOR_ACCEPT_LOOP).await?;
-    let mut terminate = terminate.fuse();
+    let mut terminate = reg.terminate.fuse();
 
     let listener = TcpListener::bind(addr).await?;
     let mut incoming = listener.incoming();
-    let mut actor_id = ACTOR_PEERS;
     loop {
         select_biased! {
           _ = terminate => break,
           stream = incoming.next().fuse() => {
             if let Some(stream) = stream {
               let stream = stream?;
-              Registry::spawn(connection_loop(registry_ch.clone(), stream, actor_id, server_id.clone()));
-              actor_id += 1;
+              Registry::spawn(connection_loop(stream, server_id.clone()));
             } else {
               break;
             }
           },
         }
     }
-    let _ = terminated.send(Void {});
+    let _ = reg.terminated.send(Void {});
     Ok(())
 }
 
 async fn process_ssb_cmd<R: Read + Unpin, W: Write + Unpin>(
+    terminate: SigTerminate,
     mut api: ApiHelper<R, W>,
-    _actor_id: usize,
     server_ssb_id: String,
     peer_ssb_id: String,
-    terminate_receiver: SigTerminate,
 ) -> AnyResult<()> {
-    let mut terminate_receiver = terminate_receiver.fuse();
+    let mut terminate_receiver = terminate.fuse();
 
     // why this is requiered? i cannot remember it :(
     let args = CreateHistoryStreamArgs::new(server_ssb_id.clone());
@@ -104,32 +95,33 @@ async fn process_ssb_cmd<R: Read + Unpin, W: Write + Unpin>(
                         };
 
                         let from = req.seq.unwrap_or(1u64);
-                        let last = DB
-                            .read()
-                            .await
-                            .get_feed_len(&req_id)?
-                            .map_or(0, |x| x + 1);
+                        let last = DB.read().await.get_feed_len(&req_id)?.map_or(0, |x| x + 1);
 
                         let with_keys = req.keys.unwrap_or(true);
 
-                        info!("Sending history stream of {} ({}..{})",req.id,from,last);
+                        info!("Sending history stream of {} ({}..{})", req.id, from, last);
                         for n in from..last {
-                            let data = DB.read().await.get_feed(&req_id, n-1)?;
-                            let data =if with_keys {
+                            let data = DB.read().await.get_feed(&req_id, n - 1)?;
+                            let data = if with_keys {
                                 data.to_string()
                             } else {
                                 data.value.to_string()
                             };
-                            info!(" - [with_keys={}]{}",with_keys,&data.to_string());
-                            api.feed_res_send(rpc_id, &data).await?;    
+                            info!(" - [with_keys={}]{}", with_keys, &data.to_string());
+                            api.feed_res_send(rpc_id, &data).await?;
                         }
                         if !req.live.unwrap_or(false) {
                             api.rpc().send_stream_eof(rpc_id).await?;
                         }
                     }
                     _ => {
-                        warn!("Unknown method requested {:?}, erroring to client", selector);
-                        api.rpc().send_error(rpc_id, req.rpc_type, "unknown method").await?;
+                        debug!(
+                            "Unknown method requested {:?}, erroring to client",
+                            selector
+                        );
+                        api.rpc()
+                            .send_error(rpc_id, req.rpc_type, "unknown method")
+                            .await?;
                     }
                 }
             }
@@ -139,11 +131,17 @@ async fn process_ssb_cmd<R: Read + Unpin, W: Write + Unpin>(
             RecvMsg::CancelStreamRespose() => {
                 api.rpc().send_stream_eof(-rpc_id).await?;
             }
-            RecvMsg::OtherRequest(_type,body) => {
-                warn!("recieved unknown OtherRequest '{}'", String::from_utf8_lossy(&body));
+            RecvMsg::OtherRequest(_type, body) => {
+                debug!(
+                    "recieved unknown OtherRequest '{}'",
+                    String::from_utf8_lossy(&body)
+                );
             }
             RecvMsg::RpcResponse(_type, body) => {
-                warn!("recieved unknown RpcResponse '{}'", String::from_utf8_lossy(&body));
+                debug!(
+                    "recieved unknown RpcResponse '{}'",
+                    String::from_utf8_lossy(&body)
+                );
             }
         }
     }
@@ -151,13 +149,9 @@ async fn process_ssb_cmd<R: Read + Unpin, W: Write + Unpin>(
     Ok(())
 }
 
-async fn connection_loop(
-    mut registry_ch: RegistryCh,
-    mut stream: TcpStream,
-    actor_id: usize,
-    server_id: OwnedIdentity,
-) -> AnyResult<()> {
+async fn connection_loop(mut stream: TcpStream, server_id: OwnedIdentity) -> AnyResult<()> {
     /* perform handshake ----------------------------------------------------------------------------- */
+    let reg = REGISTRY.lock().await.register("sbot-instance").await?;
 
     let OwnedIdentity {
         pk: server_pk,
@@ -177,16 +171,18 @@ async fn connection_loop(
     let rpc = RpcStream::new(box_stream_read, box_stream_write);
     let api = ApiHelper::new(rpc);
 
-    let (terminate, _terminated) = Registry::register(&mut registry_ch, actor_id).await?;
+    let ActorEndpoint {
+        terminate,
+        mut ch,
+        actor_id,
+        ..
+    } = reg;
 
-    let res = process_ssb_cmd(api, actor_id, id,  peer_ssb_id, terminate).await;
+    let res = process_ssb_cmd(terminate, api, id, peer_ssb_id).await;
     if let Err(err) = res {
         warn!("client terminated with error {:?}", err);
     }
 
-    registry_ch
-        .send(Event::Disconnect { actor_id })
-        .await
-        .unwrap();
+    ch.send(Event::Disconnect { actor_id }).await.unwrap();
     Ok(())
 }

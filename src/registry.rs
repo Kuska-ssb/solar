@@ -1,11 +1,9 @@
+use async_std::{prelude::*, sync::Mutex, task, task::JoinHandle};
 use futures::{channel::mpsc, channel::oneshot, select, FutureExt, SinkExt};
-use async_std::{
-    prelude::*,
-    task,
-    task::JoinHandle,
-};
 
-use std::{collections::hash_map::HashMap};
+use once_cell::sync::Lazy;
+
+use std::collections::hash_map::HashMap;
 
 #[derive(Debug)]
 pub struct Void {}
@@ -18,52 +16,75 @@ pub type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send 
 
 #[derive(Debug)]
 pub enum Event {
-    Connect(Actor),
+    Connect(RegistryEndpoint),
     Disconnect { actor_id: usize },
     Terminate,
 }
 
 #[derive(Debug)]
-pub struct Actor {
+pub struct RegistryEndpoint {
     pub actor_id: usize,
     pub terminate: SigTerminated,
     pub terminated: SigTerminate,
 }
-
-pub struct Registry {
-    sender  : RegistryCh,
-    msgloop : JoinHandle<()>,
+#[derive(Debug)]
+pub struct ActorEndpoint {
+    pub actor_id: usize,
+    pub ch: RegistryCh,
+    pub terminate: SigTerminate,
+    pub terminated: SigTerminated,
 }
+
+#[derive(Debug)]
+pub struct Registry {
+    last_actor_id: usize,
+    sender: RegistryCh,
+    msgloop: Option<JoinHandle<()>>,
+}
+
+pub static REGISTRY: Lazy<Mutex<Registry>> = Lazy::new(|| Mutex::new(Registry::new()));
 
 impl Registry {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded();
         let msgloop = task::spawn(Self::msg_loop(receiver));
         Self {
+            last_actor_id: 0,
             sender,
-            msgloop,
+            msgloop: Some(msgloop),
         }
     }
-    pub fn channel(&self) -> RegistryCh {
-        self.sender.clone()
+    pub fn take_msgloop(&mut self) -> JoinHandle<()> {
+        self.msgloop.take().unwrap()
     }
-    pub async fn join(self) {
-        self.msgloop.await;
-    } 
-    pub async fn register(sender : &mut RegistryCh, actor_id: usize) -> AnyResult<(SigTerminate, SigTerminated)> {
+    pub async fn register(&mut self, name: &str) -> AnyResult<ActorEndpoint> {
+        self.last_actor_id += 1;
+
+        info!("Registering actor {}={}", self.last_actor_id, name);
+
         let (terminate_sender, terminate_receiver) = oneshot::channel::<Void>();
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
-    
-        let actor = Actor {
-            actor_id,
+
+        let registry_endpoint = RegistryEndpoint {
+            actor_id: self.last_actor_id,
             terminate: terminate_sender,
             terminated: terminated_receiver,
         };
-    
-        sender.send(Event::Connect(actor)).await.unwrap();
-    
-        Ok((terminate_receiver, terminated_sender))
+        let actor_endpoint = ActorEndpoint {
+            actor_id: self.last_actor_id,
+            ch: self.sender.clone(),
+            terminate: terminate_receiver,
+            terminated: terminated_sender,
+        };
+
+        self.sender
+            .send(Event::Connect(registry_endpoint))
+            .await
+            .unwrap();
+
+        Ok(actor_endpoint)
     }
+
     pub fn spawn<F>(fut: F) -> task::JoinHandle<()>
     where
         F: Future<Output = AnyResult<()>> + Send + 'static,
@@ -73,10 +94,10 @@ impl Registry {
                 eprintln!("{}", e)
             }
         })
-    }    
+    }
     async fn msg_loop(mut events: mpsc::UnboundedReceiver<Event>) {
-        let mut peers: HashMap<usize, Actor> = HashMap::new();
-    
+        let mut peers: HashMap<usize, RegistryEndpoint> = HashMap::new();
+
         loop {
             let event = select! {
                 event = events.next().fuse() => match event {
@@ -99,7 +120,7 @@ impl Registry {
                 }
             }
         }
-    
+
         // send a termination signal
         let (terms, termds): (Vec<_>, Vec<_>) = peers
             .drain()
@@ -110,19 +131,17 @@ impl Registry {
                 )
             })
             .unzip();
-    
+
         for (actor_id, term) in terms {
-            debug!("Sending term signal to {}", actor_id);
-            term.send(Void {}).unwrap();
+            info!("Sending term signal to {}", actor_id);
+            let _ = term.send(Void {});
         }
-    
+
         // wait to be finished
         for (actor_id, termd) in termds {
-            debug!("Waiting termd signal from {}", actor_id);
+            info!("Waiting termd signal from {}", actor_id);
             let _ = termd.await;
         }
         drop(peers);
     }
 }
-
-

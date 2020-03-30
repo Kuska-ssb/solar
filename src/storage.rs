@@ -1,9 +1,7 @@
+use async_std::sync::{Arc, RwLock};
 use kuska_ssb::feed::{Feed, Message};
 use serde::{Deserialize, Serialize};
 use serde_cbor;
-use async_std::{
-    sync::{Arc, RwLock},
-};
 
 const PREFIX_LASTFEED: u8 = 0u8;
 const PREFIX_FEED: u8 = 1u8;

@@ -8,21 +8,16 @@ extern crate futures;
 extern crate log;
 extern crate get_if_addrs;
 
+use async_std::fs::File;
 
-use async_std::{
-    fs::File,
-};
+use kuska_ssb::keystore::{read_patchwork_config, write_patchwork_config, OwnedIdentity};
 
-use kuska_ssb::{
-    keystore::{read_patchwork_config, write_patchwork_config, OwnedIdentity},
-};
-
-mod storage;
-mod registry;
 mod actors;
+mod registry;
+mod storage;
 
-use storage::DB;
 use registry::*;
+use storage::DB;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
@@ -54,25 +49,24 @@ async fn main() -> AnyResult<()> {
         read_patchwork_config(&mut file).await?
     };
 
-    println!("Server started on {}:{}", LISTEN, base64::encode(&server_id.pk[..]));
+    println!(
+        "Server started on {}:{}",
+        LISTEN,
+        base64::encode(&server_id.pk[..])
+    );
 
     DB.write().await.open(&db_folder)?;
 
-    let reg = Registry::new();
-
-    Registry::spawn(actors::ctrlc::actor(reg.channel()));
+    Registry::spawn(actors::ctrlc::actor());
     Registry::spawn(actors::landiscovery::actor(
-        reg.channel(),
         base64::encode(&server_id.pk[..]),
-        RPC_PORT
+        RPC_PORT,
     ));
-    Registry::spawn(actors::sensor::actor(
-        reg.channel(),
-        server_id.clone(),
-    ));
-    Registry::spawn(actors::sbot::actor(reg.channel(), server_id, LISTEN));
+    Registry::spawn(actors::sensor::actor(server_id.clone()));
+    Registry::spawn(actors::sbot::actor(server_id, LISTEN));
 
-    reg.join().await;
+    let msgloop = REGISTRY.lock().await.take_msgloop();
+    msgloop.await;
 
     println!("Gracefully finished");
     Ok(())
