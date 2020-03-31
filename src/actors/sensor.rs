@@ -9,13 +9,13 @@ use crate::registry::*;
 use crate::storage::DB;
 
 pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
-    let reg = REGISTRY.lock().await.register("sensor").await?;
-    let mut terminate = reg.terminate.fuse();
+    let reg = REGISTRY.lock().await.register("sensor",false).await?;
+    let mut ch_terminate = reg.ch_terminate.fuse();
 
     loop {
         select_biased! {
-          _ = terminate => break,
-          _ = task::sleep(Duration::from_secs(5000)).fuse() => {
+          _ = ch_terminate => break,
+          _ = task::sleep(Duration::from_secs(5)).fuse() => {
               let db = DB.write().await;
 
               let last_msg =  if let Some(last_id) = db.get_feed_len(&server_id.id)? {
@@ -28,7 +28,7 @@ pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
               let post = Post::new(markdown, None).to_msg()?;
               let msg = Message::sign(last_msg.as_ref(), &server_id, post)?;
               info!("Adding {:?}",msg);
-              let next_id = db.append_feed(msg)?;
+              let next_id = db.append_feed(msg).await?;
 
               println!("Recoding sensor data {} ...",next_id);
 
@@ -36,6 +36,6 @@ pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
           }
         }
     }
-    let _ = reg.terminated.send(Void {});
+    let _ = reg.ch_terminated.send(Void {});
     Ok(())
 }

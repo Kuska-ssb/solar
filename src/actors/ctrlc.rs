@@ -4,11 +4,11 @@ use async_ctrlc::CtrlC;
 use futures::SinkExt;
 
 pub async fn actor() -> AnyResult<()> {
-    let mut reg = REGISTRY.lock().await.register("crtlc").await?;
+    let mut reg = REGISTRY.lock().await.register("crtlc",false).await?;
 
     let ctrlc = CtrlC::new().expect("cannot create Ctrl+C handler?");
     ctrlc.await;
     println!("Got CTRL-C, sending termination signal to jobs...");
-    let _ = reg.ch.send(Event::Terminate).await;
+    let _ = reg.ch_registry.send(Event::Terminate).await;
     Ok(())
 }
