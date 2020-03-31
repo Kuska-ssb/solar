@@ -35,7 +35,7 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
             };
         }
     }
-    let reg = REGISTRY.lock().await.register("landiscover").await?;
+    let reg = REGISTRY.lock().await.register("landiscover",false).await?;
 
     let broadcast_list = packets
         .iter()
@@ -44,11 +44,11 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
         .join(",");
     info!("broadcast will be sent to {}", broadcast_list);
 
-    let mut terminate = reg.terminate.fuse();
+    let mut ch_terminate = reg.ch_terminate.fuse();
 
     loop {
         select_biased! {
-          _ = terminate => break,
+          _ = ch_terminate => break,
           _ = task::sleep(Duration::from_secs(1)).fuse() => {
             debug!("sending broadcast");
             for msg in &packets {
@@ -64,6 +64,6 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
           }
         }
     }
-    let _ = reg.terminated.send(Void {});
+    let _ = reg.ch_terminated.send(Void {});
     Ok(())
 }

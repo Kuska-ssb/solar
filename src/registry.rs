@@ -1,16 +1,20 @@
 use async_std::{prelude::*, sync::Mutex, task, task::JoinHandle};
 use futures::{channel::mpsc, channel::oneshot, select, FutureExt, SinkExt};
+use kuska_ssb::feed::Message;
 
 use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
+
 #[derive(Debug)]
 pub struct Void {}
 
-pub type RegistryCh = mpsc::UnboundedSender<Event>;
-pub type SigTerminated = oneshot::Sender<Void>;
-pub type SigTerminate = oneshot::Receiver<Void>;
+pub type ChStoRecv = mpsc::UnboundedReceiver<Message>;
+pub type ChStoSend = mpsc::UnboundedSender<Message>;
+pub type ChRegevSend = mpsc::UnboundedSender<Event>;
+pub type ChSigSend = oneshot::Sender<Void>;
+pub type ChSigRecv = oneshot::Receiver<Void>;
 
 pub type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -18,27 +22,33 @@ pub type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send 
 pub enum Event {
     Connect(RegistryEndpoint),
     Disconnect { actor_id: usize },
+    Storage(Message),
     Terminate,
 }
 
 #[derive(Debug)]
 pub struct RegistryEndpoint {
     pub actor_id: usize,
-    pub terminate: SigTerminated,
-    pub terminated: SigTerminate,
+    pub ch_terminate: ChSigSend,
+    pub ch_terminated: ChSigRecv,
+    pub ch_storage: Option<ChStoSend>,
 }
+
 #[derive(Debug)]
 pub struct ActorEndpoint {
     pub actor_id: usize,
-    pub ch: RegistryCh,
-    pub terminate: SigTerminate,
-    pub terminated: SigTerminated,
+
+    pub ch_registry: ChRegevSend,
+    pub ch_terminate: ChSigRecv,
+    pub ch_terminated: ChSigSend,
+
+    pub ch_storage: Option<ChStoRecv>,
 }
 
 #[derive(Debug)]
 pub struct Registry {
     last_actor_id: usize,
-    sender: RegistryCh,
+    sender: ChRegevSend,
     msgloop: Option<JoinHandle<()>>,
 }
 
@@ -57,7 +67,7 @@ impl Registry {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(&mut self, name: &str) -> AnyResult<ActorEndpoint> {
+    pub async fn register(&mut self, name: &str, storage_notify :bool) -> AnyResult<ActorEndpoint> {
         self.last_actor_id += 1;
 
         info!("Registering actor {}={}", self.last_actor_id, name);
@@ -65,16 +75,25 @@ impl Registry {
         let (terminate_sender, terminate_receiver) = oneshot::channel::<Void>();
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
 
+        let (sto_sender, sto_receiver) = if storage_notify {
+            let (s,r) = mpsc::unbounded::<Message>();
+            (Some(s),Some(r))
+        } else {
+            (None,None)
+        };
+
         let registry_endpoint = RegistryEndpoint {
             actor_id: self.last_actor_id,
-            terminate: terminate_sender,
-            terminated: terminated_receiver,
+            ch_terminate: terminate_sender,
+            ch_terminated: terminated_receiver,
+            ch_storage: sto_sender,
         };
         let actor_endpoint = ActorEndpoint {
             actor_id: self.last_actor_id,
-            ch: self.sender.clone(),
-            terminate: terminate_receiver,
-            terminated: terminated_sender,
+            ch_registry: self.sender.clone(),
+            ch_terminate: terminate_receiver,
+            ch_terminated: terminated_sender,
+            ch_storage : sto_receiver,
         };
 
         self.sender
@@ -83,6 +102,9 @@ impl Registry {
             .unwrap();
 
         Ok(actor_endpoint)
+    }
+    pub fn create_sender(&self) -> ChRegevSend {
+        self.sender.clone()
     }
 
     pub fn spawn<F>(fut: F) -> task::JoinHandle<()>
@@ -96,7 +118,7 @@ impl Registry {
         })
     }
     async fn msg_loop(mut events: mpsc::UnboundedReceiver<Event>) {
-        let mut peers: HashMap<usize, RegistryEndpoint> = HashMap::new();
+        let mut actors: HashMap<usize, RegistryEndpoint> = HashMap::new();
 
         loop {
             let event = select! {
@@ -110,24 +132,31 @@ impl Registry {
                     info!("Msg Got terminate ");
                     break;
                 }
-                Event::Connect(peer) => {
-                    debug!("Registering peer {}", peer.actor_id);
-                    peers.insert(peer.actor_id, peer);
+                Event::Connect(actor) => {
+                    debug!("Registering actor {}", actor.actor_id);
+                    actors.insert(actor.actor_id, actor);
                 }
                 Event::Disconnect { actor_id } => {
-                    debug!("Unregistering peer {}", actor_id);
-                    peers.remove(&actor_id);
+                    debug!("Unregistering actor {}", actor_id);
+                    actors.remove(&actor_id);
+                }
+                Event::Storage(msg) => {
+                    for actor in actors.values_mut() {
+                        if let Some(ch) = &mut actor.ch_storage {
+                            let _ = ch.send(msg.clone()).await;
+                        }
+                    }                    
                 }
             }
         }
 
         // send a termination signal
-        let (terms, termds): (Vec<_>, Vec<_>) = peers
+        let (terms, termds): (Vec<_>, Vec<_>) = actors
             .drain()
-            .map(|(_, peer)| {
+            .map(|(_, actor)| {
                 (
-                    (peer.actor_id, peer.terminate),
-                    (peer.actor_id, peer.terminated),
+                    (actor.actor_id, actor.ch_terminate),
+                    (actor.actor_id, actor.ch_terminated),
                 )
             })
             .unzip();
@@ -142,6 +171,6 @@ impl Registry {
             info!("Waiting termd signal from {}", actor_id);
             let _ = termd.await;
         }
-        drop(peers);
+        drop(actors);
     }
 }

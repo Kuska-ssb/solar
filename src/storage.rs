@@ -2,6 +2,8 @@ use async_std::sync::{Arc, RwLock};
 use kuska_ssb::feed::{Feed, Message};
 use serde::{Deserialize, Serialize};
 use serde_cbor;
+use crate::registry::{ChRegevSend,Event};
+use futures::SinkExt;
 
 const PREFIX_LASTFEED: u8 = 0u8;
 const PREFIX_FEED: u8 = 1u8;
@@ -13,6 +15,7 @@ lazy_static! {
 
 pub struct Storage {
     db: Option<sled::Db>,
+    ch_reg: Option<ChRegevSend>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,11 +61,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl Storage {
     pub fn default() -> Self {
-        Self { db: None }
+        Self { db: None, ch_reg : None}
     }
 
-    pub fn open(&mut self, path: &std::path::Path) -> Result<()> {
+    pub fn open(&mut self, path: &std::path::Path, ch_reg : ChRegevSend) -> Result<()> {
         self.db = Some(sled::open(path)?);
+        self.ch_reg = Some(ch_reg);
         Ok(())
     }
     pub fn get_feed_len(&self, user_id: &str) -> Result<Option<u64>> {
@@ -121,7 +125,7 @@ impl Storage {
             .into_message()?)
     }
 
-    pub fn append_feed(&self, msg: Message) -> Result<u64> {
+    pub async fn append_feed(&self, msg: Message) -> Result<u64> {
         let seq_no = self.get_feed_len(msg.author())?.map_or(0, |no| no + 1);
         let author = msg.author().to_owned();
         let db = self.db.as_ref().unwrap();
@@ -132,10 +136,12 @@ impl Storage {
         })?;
         db.insert(Self::key_message(&msg.id().to_string()), feed_ref)?;
 
-        let feed = Feed::new(msg);
+        let feed = Feed::new(msg.clone());
         db.insert(Self::key_feed(&author, seq_no), feed.to_string().as_bytes())?;
         db.insert(Self::key_lastfeed(&author), &seq_no.to_be_bytes()[..])?;
 
+        self.ch_reg.as_ref().unwrap().send(Event::Storage(msg)).await.unwrap();
         Ok(seq_no)
     }
+
 }

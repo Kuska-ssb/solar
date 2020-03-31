@@ -55,7 +55,7 @@ async fn main() -> AnyResult<()> {
         base64::encode(&server_id.pk[..])
     );
 
-    DB.write().await.open(&db_folder)?;
+    DB.write().await.open(&db_folder,REGISTRY.lock().await.create_sender())?;
 
     Registry::spawn(actors::ctrlc::actor());
     Registry::spawn(actors::landiscovery::actor(
