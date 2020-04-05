@@ -1,28 +1,26 @@
 use async_std::{prelude::*, sync::Mutex, task, task::JoinHandle};
 use futures::{channel::mpsc, channel::oneshot, select, FutureExt, SinkExt};
-use kuska_ssb::feed::Message;
 
 use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
-
 #[derive(Debug)]
 pub struct Void {}
 
-pub type ChStoRecv = mpsc::UnboundedReceiver<Message>;
-pub type ChStoSend = mpsc::UnboundedSender<Message>;
+pub type ChStoRecv = mpsc::UnboundedReceiver<String>;
+pub type ChStoSend = mpsc::UnboundedSender<String>;
 pub type ChRegevSend = mpsc::UnboundedSender<Event>;
 pub type ChSigSend = oneshot::Sender<Void>;
 pub type ChSigRecv = oneshot::Receiver<Void>;
 
-pub type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
 
 #[derive(Debug)]
 pub enum Event {
     Connect(RegistryEndpoint),
     Disconnect { actor_id: usize },
-    Storage(Message),
+    IdUpdated(String),
     Terminate,
 }
 
@@ -76,7 +74,7 @@ impl Registry {
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
 
         let (sto_sender, sto_receiver) = if storage_notify {
-            let (s,r) = mpsc::unbounded::<Message>();
+            let (s,r) = mpsc::unbounded::<String>();
             (Some(s),Some(r))
         } else {
             (None,None)
@@ -140,10 +138,10 @@ impl Registry {
                     debug!("Unregistering actor {}", actor_id);
                     actors.remove(&actor_id);
                 }
-                Event::Storage(msg) => {
+                Event::IdUpdated(id) => {
                     for actor in actors.values_mut() {
                         if let Some(ch) = &mut actor.ch_storage {
-                            let _ = ch.send(msg.clone()).await;
+                            let _ = ch.send(id.clone()).await;
                         }
                     }                    
                 }

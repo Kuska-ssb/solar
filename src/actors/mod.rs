@@ -1,4 +1,5 @@
 pub mod ctrlc;
 pub mod landiscovery;
-pub mod sbot;
+pub mod muxrpc;
 pub mod sensor;
+pub mod rpcs;
