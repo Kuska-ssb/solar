@@ -140,7 +140,7 @@ impl Storage {
         db.insert(Self::key_feed(&author, seq_no), feed.to_string().as_bytes())?;
         db.insert(Self::key_lastfeed(&author), &seq_no.to_be_bytes()[..])?;
 
-        self.ch_reg.as_ref().unwrap().send(Event::Storage(msg)).await.unwrap();
+        self.ch_reg.as_ref().unwrap().send(Event::IdUpdated(msg.author().clone())).await.unwrap();
         Ok(seq_no)
     }
 

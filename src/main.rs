@@ -63,7 +63,7 @@ async fn main() -> AnyResult<()> {
         RPC_PORT,
     ));
     Registry::spawn(actors::sensor::actor(server_id.clone()));
-    Registry::spawn(actors::sbot::actor(server_id, LISTEN));
+    Registry::spawn(actors::muxrpc::actor(server_id, LISTEN));
 
     let msgloop = REGISTRY.lock().await.take_msgloop();
     msgloop.await;
