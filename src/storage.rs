@@ -1,11 +1,11 @@
 use async_std::sync::{Arc, RwLock};
+use futures::SinkExt;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_cbor;
-use futures::SinkExt;
 
+use crate::broker::{BrokerEvent, ChBrokerSend};
 use kuska_ssb::feed::{Feed, Message};
-use crate::broker::{ChBrokerSend,BrokerEvent};
 
 use futures::channel::mpsc;
 
@@ -13,9 +13,9 @@ const PREFIX_LASTFEED: u8 = 0u8;
 const PREFIX_FEED: u8 = 1u8;
 const PREFIX_MESSAGE: u8 = 2u8;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum StorageEvent {
-    IdChanged(String)
+    IdChanged(String),
 }
 
 pub type ChStoRecv = mpsc::UnboundedReceiver<StorageEvent>;
@@ -71,10 +71,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl Storage {
     pub fn default() -> Self {
-        Self { db: None, ch_broker : None}
+        Self {
+            db: None,
+            ch_broker: None,
+        }
     }
 
-    pub fn open(&mut self, path: &std::path::Path, ch_broker : ChBrokerSend) -> Result<()> {
+    pub fn open(&mut self, path: &std::path::Path, ch_broker: ChBrokerSend) -> Result<()> {
         self.db = Some(sled::open(path)?);
         self.ch_broker = Some(ch_broker);
         Ok(())
@@ -150,7 +153,14 @@ impl Storage {
         db.insert(Self::key_feed(&author, seq_no), feed.to_string().as_bytes())?;
         db.insert(Self::key_lastfeed(&author), &seq_no.to_be_bytes()[..])?;
 
-        self.ch_broker.as_ref().unwrap().send(BrokerEvent::Storage(StorageEvent::IdChanged(msg.author().clone()))).await.unwrap();
+        self.ch_broker
+            .as_ref()
+            .unwrap()
+            .send(BrokerEvent::Storage(StorageEvent::IdChanged(
+                msg.author().clone(),
+            )))
+            .await
+            .unwrap();
         Ok(seq_no)
     }
 }

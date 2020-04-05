@@ -1,27 +1,27 @@
-use async_std::{
-    io::{Read, Write},
-};
+use async_std::io::{Read, Write};
 
+use async_trait::async_trait;
 use kuska_ssb::{
     api::{ApiHelper, ApiMethod},
     rpc::RecvMsg,
 };
-use async_trait::async_trait;
 
 use crate::error::AnyResult;
 use crate::storage::DB;
 
-use super::{RpcHandler,RpcInput};
-pub struct GetHandler{}
+use super::{RpcHandler, RpcInput};
+pub struct GetHandler {}
 
 impl Default for GetHandler {
     fn default() -> Self {
-        Self{}
+        Self {}
     }
 }
 
 #[async_trait]
-impl<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync> RpcHandler<R,W> for GetHandler {
+impl<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync> RpcHandler<R, W>
+    for GetHandler
+{
     async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {
@@ -38,11 +38,10 @@ impl<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync> RpcHandler<R
                         };
                         Ok(true)
                     }
-                    _ => Ok(false)
+                    _ => Ok(false),
                 }
             }
-            _ => Ok(false)
+            _ => Ok(false),
         }
     }
 }
-
