@@ -8,7 +8,7 @@ use kuska_ssb::{
 };
 use async_trait::async_trait;
 
-use crate::registry::*;
+use crate::error::Result;
 use crate::storage::DB;
 
 use super::{RpcHandler,RpcInput};
@@ -22,7 +22,7 @@ impl Default for GetHandler {
 
 #[async_trait]
 impl<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync> RpcHandler<R,W> for GetHandler {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> Result<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {

@@ -14,13 +14,16 @@ use kuska_ssb::{
     rpc::RpcStream,
 };
 
-use crate::registry::*;
+use crate::storage::ChStoRecv;
+use crate::broker::*;
+use crate::error::Result;
+
 use super::rpcs::{RpcInput,RpcHandler,HistoryStreamHandler,GetHandler,WhoAmIHandler};
 
-pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> AnyResult<()> {
-    let reg = REGISTRY.lock().await.register("sbot-listener",false).await?;
+pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> Result<()> {
+    let broker = BROKER.lock().await.register("sbot-listener",false).await?;
 
-    let mut ch_terminate = reg.ch_terminate.fuse();
+    let mut ch_terminate = broker.ch_terminate.fuse();
 
     let listener = TcpListener::bind(addr).await?;
     let mut incoming = listener.incoming();
@@ -31,19 +34,19 @@ pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> AnyRes
           stream = incoming.next().fuse() => {
             if let Some(stream) = stream {
               let stream = stream?;
-              Registry::spawn(handle_connection(stream, server_id.clone()));
+              Broker::spawn(handle_connection(stream, server_id.clone()));
             } else {
               break;
             }
           },
         }
     }
-    let _ = reg.ch_terminated.send(Void {});
+    let _ = broker.ch_terminated.send(Void {});
     Ok(())
 }
 
-async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> AnyResult<()> {
-    let reg = REGISTRY.lock().await.register("sbot-instance", true).await?;
+async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> Result<()> {
+    let broker = BROKER.lock().await.register("sbot-instance", true).await?;
 
     let OwnedIdentity {
         pk: server_pk,
@@ -63,11 +66,11 @@ async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> A
 
     let ActorEndpoint {
         ch_terminate,
-        mut ch_registry,
+        mut ch_broker,
         ch_storage,
         actor_id,
         ..
-    } = reg;
+    } = broker;
     let res = sbot_loop(
         ch_terminate,ch_storage.unwrap(),
         &mut api, id, peer_ssb_id).await;
@@ -76,10 +79,9 @@ async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> A
         warn!("client terminated with error {:?}", err);
     }
 
-    ch_registry.send(Event::Disconnect { actor_id }).await.unwrap();
+    ch_broker.send(BrokerEvent::Disconnect { actor_id }).await.unwrap();
     Ok(())
 }
-
 
 async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync>(
     ch_terminate: ChSigRecv,
@@ -87,7 +89,7 @@ async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     api: &mut ApiHelper<R, W>,
     server_ssb_id: String,
     peer_ssb_id: String,
-) -> AnyResult<()> {
+) -> Result<()> {
     let mut ch_terminate = ch_terminate.fuse();
 
     let mut history_stream_handler = HistoryStreamHandler::default();

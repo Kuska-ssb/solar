@@ -1,13 +1,25 @@
 use async_std::sync::{Arc, RwLock};
-use kuska_ssb::feed::{Feed, Message};
+
 use serde::{Deserialize, Serialize};
 use serde_cbor;
-use crate::registry::{ChRegevSend,Event};
 use futures::SinkExt;
+
+use kuska_ssb::feed::{Feed, Message};
+use crate::broker::{ChBrokerSend,BrokerEvent};
+
+use futures::channel::mpsc;
 
 const PREFIX_LASTFEED: u8 = 0u8;
 const PREFIX_FEED: u8 = 1u8;
 const PREFIX_MESSAGE: u8 = 2u8;
+
+#[derive(Debug,Clone)]
+pub enum StorageEvent {
+    IdChanged(String)
+}
+
+pub type ChStoRecv = mpsc::UnboundedReceiver<StorageEvent>;
+pub type ChStoSend = mpsc::UnboundedSender<StorageEvent>;
 
 lazy_static! {
     pub static ref DB: Arc<RwLock<Storage>> = Arc::new(RwLock::new(Storage::default()));
@@ -15,7 +27,7 @@ lazy_static! {
 
 pub struct Storage {
     db: Option<sled::Db>,
-    ch_reg: Option<ChRegevSend>,
+    ch_broker: Option<ChBrokerSend>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -61,12 +73,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 impl Storage {
     pub fn default() -> Self {
-        Self { db: None, ch_reg : None}
+        Self { db: None, ch_broker : None}
     }
 
-    pub fn open(&mut self, path: &std::path::Path, ch_reg : ChRegevSend) -> Result<()> {
+    pub fn open(&mut self, path: &std::path::Path, ch_broker : ChBrokerSend) -> Result<()> {
         self.db = Some(sled::open(path)?);
-        self.ch_reg = Some(ch_reg);
+        self.ch_broker = Some(ch_broker);
         Ok(())
     }
     pub fn get_feed_len(&self, user_id: &str) -> Result<Option<u64>> {
@@ -140,8 +152,7 @@ impl Storage {
         db.insert(Self::key_feed(&author, seq_no), feed.to_string().as_bytes())?;
         db.insert(Self::key_lastfeed(&author), &seq_no.to_be_bytes()[..])?;
 
-        self.ch_reg.as_ref().unwrap().send(Event::IdUpdated(msg.author().clone())).await.unwrap();
+        self.ch_broker.as_ref().unwrap().send(BrokerEvent::Storage(StorageEvent::IdChanged(msg.author().clone()))).await.unwrap();
         Ok(seq_no)
     }
-
 }

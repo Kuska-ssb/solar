@@ -11,8 +11,10 @@ use kuska_ssb::{
     rpc::RecvMsg,
 };
 
-use crate::registry::*;
+use crate::error::Result;
+use crate::storage::StorageEvent;
 use crate::storage::DB;
+
 use super::{RpcHandler,RpcInput};
 
 struct HistoryStreamRequest {
@@ -35,7 +37,7 @@ impl Default for HistoryStreamHandler {
 
 #[async_trait]
 impl<R: Read + Unpin + Send + Sync , W: Write + Unpin + Send + Sync > RpcHandler<R,W> for HistoryStreamHandler {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> Result<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -85,7 +87,7 @@ impl<R: Read + Unpin + Send + Sync , W: Write + Unpin + Send + Sync > RpcHandler
                 }
             }
 
-            RpcInput::Storage(id) => {
+            RpcInput::Storage(StorageEvent::IdChanged(id)) => {
                 if let Some(mut req) = self.reqs.remove(id) {
                     self.send_history(api, &mut req).await?;
                     self.reqs.insert(id.clone(),req);
@@ -104,7 +106,7 @@ impl HistoryStreamHandler {
         &mut self,
         api: &mut ApiHelper<R, W>,
         req : &mut HistoryStreamRequest
-    ) -> AnyResult<()>
+    ) -> Result<()>
     {
         let req_id = if req.args.id.starts_with('@') {
             req.args.id.clone()
