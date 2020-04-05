@@ -9,7 +9,7 @@ use kuska_ssb::{
 };
 
 use super::{RpcHandler, RpcInput};
-use crate::error::AnyResult;
+use crate::error::SolarResult;
 
 pub struct WhoAmIHandler<'a, R, W>
 where
@@ -39,7 +39,7 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -57,7 +57,7 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
-    async fn recv_whoami(&mut self, api: &mut ApiHelper<R, W>, req_no: i32) -> AnyResult<bool> {
+    async fn recv_whoami(&mut self, api: &mut ApiHelper<R, W>, req_no: i32) -> SolarResult<bool> {
         api.whoami_res_send(req_no, self.peer_ssb_id.to_string())
             .await?;
         Ok(true)

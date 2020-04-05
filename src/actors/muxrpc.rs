@@ -15,12 +15,12 @@ use kuska_ssb::{
 };
 
 use crate::broker::*;
-use crate::error::AnyResult;
+use crate::error::SolarResult;
 use crate::storage::ChStoRecv;
 
 use super::rpcs::{GetHandler, HistoryStreamHandler, RpcHandler, RpcInput, WhoAmIHandler};
 
-pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> AnyResult<()> {
+pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> SolarResult<()> {
     let broker = BROKER.lock().await.register("sbot-listener", false).await?;
 
     let mut ch_terminate = broker.ch_terminate.fuse();
@@ -45,7 +45,7 @@ pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> AnyRes
     Ok(())
 }
 
-async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> AnyResult<()> {
+async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> SolarResult<()> {
     let broker = BROKER.lock().await.register("sbot-instance", true).await?;
 
     let OwnedIdentity {
@@ -90,7 +90,7 @@ async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     api: &mut ApiHelper<R, W>,
     server_ssb_id: String,
     peer_ssb_id: String,
-) -> AnyResult<()> {
+) -> SolarResult<()> {
     let mut ch_terminate = ch_terminate.fuse();
 
     let mut history_stream_handler = HistoryStreamHandler::default();

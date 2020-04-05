@@ -16,14 +16,14 @@ mod error;
 mod storage;
 
 use broker::*;
-use error::AnyResult;
+use error::SolarResult;
 use storage::DB;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
 
 #[async_std::main]
-async fn main() -> AnyResult<()> {
+async fn main() -> SolarResult<()> {
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
 

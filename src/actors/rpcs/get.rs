@@ -7,7 +7,7 @@ use kuska_ssb::{
     rpc,
 };
 
-use crate::error::AnyResult;
+use crate::error::SolarResult;
 use crate::storage::DB;
 
 use super::{RpcHandler, RpcInput};
@@ -38,7 +38,7 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -61,7 +61,7 @@ where
         api: &mut ApiHelper<R, W>,
         req_no: i32,
         req: &rpc::Body,
-    ) -> AnyResult<bool> {
+    ) -> SolarResult<bool> {
         let args: Vec<String> = serde_json::from_value(req.args.clone())?;
         let msg = DB.read().await.get_message(&args[0]);
         match msg {

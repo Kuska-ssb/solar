@@ -6,10 +6,10 @@ use futures::FutureExt;
 use kuska_ssb::{api::msgs::Post, feed::Message, keystore::OwnedIdentity};
 
 use crate::broker::*;
-use crate::error::AnyResult;
+use crate::error::SolarResult;
 use crate::storage::DB;
 
-pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
+pub async fn actor(server_id: OwnedIdentity) -> SolarResult<()> {
     let broker = BROKER.lock().await.register("sensor", false).await?;
     let mut ch_terminate = broker.ch_terminate.fuse();
 

@@ -10,7 +10,7 @@ use kuska_ssb::{
     rpc,
 };
 
-use crate::error::AnyResult;
+use crate::error::SolarResult;
 use crate::storage::StorageEvent;
 use crate::storage::DB;
 
@@ -50,7 +50,7 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -84,7 +84,7 @@ where
         api: &mut ApiHelper<R, W>,
         req_no: i32,
         req: &rpc::Body,
-    ) -> AnyResult<bool> {
+    ) -> SolarResult<bool> {
         let mut args: Vec<CreateHistoryStreamArgs> = serde_json::from_value(req.args.clone())?;
 
         let args = args.pop().unwrap();
@@ -107,7 +107,7 @@ where
         &mut self,
         api: &mut ApiHelper<R, W>,
         req_no: i32,
-    ) -> AnyResult<bool> {
+    ) -> SolarResult<bool> {
         if let Some(key) = self.find_key_by_req_no(req_no) {
             api.rpc().send_stream_eof(-req_no).await?;
             self.reqs.remove(&key);
@@ -122,7 +122,7 @@ where
         _api: &mut ApiHelper<R, W>,
         req_no: i32,
         error_msg: &str,
-    ) -> AnyResult<bool> {
+    ) -> SolarResult<bool> {
         if let Some(key) = self.find_key_by_req_no(req_no) {
             warn!("error {}", error_msg);
             self.reqs.remove(&key);
@@ -136,7 +136,7 @@ where
         &mut self,
         api: &mut ApiHelper<R, W>,
         id: &str,
-    ) -> AnyResult<bool> {
+    ) -> SolarResult<bool> {
         if let Some(mut req) = self.reqs.remove(id) {
             self.send_history(api, &mut req).await?;
             self.reqs.insert(id.to_string(), req);
@@ -157,7 +157,7 @@ where
         &mut self,
         api: &mut ApiHelper<R, W>,
         req: &mut HistoryStreamRequest,
-    ) -> AnyResult<()> {
+    ) -> SolarResult<()> {
         let req_id = if req.args.id.starts_with('@') {
             req.args.id.clone()
         } else {
