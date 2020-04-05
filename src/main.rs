@@ -1,8 +1,6 @@
 #![recursion_limit = "256"]
 
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate futures;
 #[macro_use]
 extern crate log;
@@ -19,13 +17,13 @@ mod error;
 
 use broker::*;
 use storage::DB;
-use error::Result;
+use error::AnyResult;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
 
 #[async_std::main]
-async fn main() -> Result<()> {
+async fn main() -> AnyResult<()> {
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
 

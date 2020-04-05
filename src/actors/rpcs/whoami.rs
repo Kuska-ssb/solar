@@ -8,7 +8,7 @@ use kuska_ssb::{
     rpc::RecvMsg,
 };
 
-use crate::error::Result;
+use crate::error::AnyResult;
 use super::{RpcHandler,RpcInput};
 
 pub struct WhoAmIHandler<'a> {
@@ -23,7 +23,7 @@ impl<'a> WhoAmIHandler<'a> {
 
 #[async_trait]
 impl<'a,R: Read + Unpin+ Send + Sync , W: Write + Unpin+ Send + Sync > RpcHandler<R,W> for WhoAmIHandler<'a> {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> Result<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {

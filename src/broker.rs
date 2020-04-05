@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
-use crate::error::Result;
+use crate::error::AnyResult;
 use crate::storage::{StorageEvent,ChStoSend,ChStoRecv};
 
 #[derive(Debug)]
@@ -64,7 +64,7 @@ impl Broker {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(&mut self, name: &str, storage_notify :bool) -> Result<ActorEndpoint> {
+    pub async fn register(&mut self, name: &str, storage_notify :bool) -> AnyResult<ActorEndpoint> {
         self.last_actor_id += 1;
 
         info!("Registering actor {}={}", self.last_actor_id, name);
@@ -106,7 +106,7 @@ impl Broker {
 
     pub fn spawn<F>(fut: F) -> task::JoinHandle<()>
     where
-        F: Future<Output = Result<()>> + Send + 'static,
+        F: Future<Output = AnyResult<()>> + Send + 'static,
     {
         task::spawn(async move {
             if let Err(e) = fut.await {

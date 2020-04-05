@@ -9,7 +9,7 @@ use kuska_ssb::{
 use async_trait::async_trait;
 
 use crate::storage::StorageEvent;
-use crate::error::Result;
+use crate::error::AnyResult;
 
 #[derive(Debug)]
 pub enum RpcInput {
@@ -20,6 +20,6 @@ pub enum RpcInput {
 
 #[async_trait]
 pub trait RpcHandler<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync> : Send + Sync {
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> Result<bool>;
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool>;
 }
 

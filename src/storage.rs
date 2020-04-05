@@ -1,5 +1,5 @@
 use async_std::sync::{Arc, RwLock};
-
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_cbor;
 use futures::SinkExt;
@@ -21,9 +21,7 @@ pub enum StorageEvent {
 pub type ChStoRecv = mpsc::UnboundedReceiver<StorageEvent>;
 pub type ChStoSend = mpsc::UnboundedSender<StorageEvent>;
 
-lazy_static! {
-    pub static ref DB: Arc<RwLock<Storage>> = Arc::new(RwLock::new(Storage::default()));
-}
+pub static DB: Lazy<Arc<RwLock<Storage>>> = Lazy::new(|| Arc::new(RwLock::new(Storage::default())));
 
 pub struct Storage {
     db: Option<sled::Db>,

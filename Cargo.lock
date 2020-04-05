@@ -1273,7 +1273,6 @@ dependencies = [
  "get_if_addrs",
  "kuska-handshake",
  "kuska-ssb",
- "lazy_static",
  "log",
  "once_cell",
  "rand 0.7.3",
