@@ -13,17 +13,19 @@ use async_std::fs::File;
 use kuska_ssb::keystore::{read_patchwork_config, write_patchwork_config, OwnedIdentity};
 
 mod actors;
-mod registry;
+mod broker;
 mod storage;
+mod error;
 
-use registry::*;
+use broker::*;
 use storage::DB;
+use error::Result;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
 
 #[async_std::main]
-async fn main() -> AnyResult<()> {
+async fn main() -> Result<()> {
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
 
@@ -55,17 +57,17 @@ async fn main() -> AnyResult<()> {
         base64::encode(&server_id.pk[..])
     );
 
-    DB.write().await.open(&db_folder,REGISTRY.lock().await.create_sender())?;
+    DB.write().await.open(&db_folder,BROKER.lock().await.create_sender())?;
 
-    Registry::spawn(actors::ctrlc::actor());
-    Registry::spawn(actors::landiscovery::actor(
+    Broker::spawn(actors::ctrlc::actor());
+    Broker::spawn(actors::landiscovery::actor(
         base64::encode(&server_id.pk[..]),
         RPC_PORT,
     ));
-    Registry::spawn(actors::sensor::actor(server_id.clone()));
-    Registry::spawn(actors::muxrpc::actor(server_id, LISTEN));
+    Broker::spawn(actors::sensor::actor(server_id.clone()));
+    Broker::spawn(actors::muxrpc::actor(server_id, LISTEN));
 
-    let msgloop = REGISTRY.lock().await.take_msgloop();
+    let msgloop = BROKER.lock().await.take_msgloop();
     msgloop.await;
 
     println!("Gracefully finished");

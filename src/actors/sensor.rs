@@ -5,12 +5,13 @@ use futures::FutureExt;
 
 use kuska_ssb::{api::msgs::Post, feed::Message, keystore::OwnedIdentity};
 
-use crate::registry::*;
+use crate::broker::*;
 use crate::storage::DB;
+use crate::error::Result;
 
-pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
-    let reg = REGISTRY.lock().await.register("sensor",false).await?;
-    let mut ch_terminate = reg.ch_terminate.fuse();
+pub async fn actor(server_id: OwnedIdentity) -> Result<()> {
+    let broker = BROKER.lock().await.register("sensor",false).await?;
+    let mut ch_terminate = broker.ch_terminate.fuse();
 
     loop {
         select_biased! {
@@ -36,6 +37,6 @@ pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
           }
         }
     }
-    let _ = reg.ch_terminated.send(Void {});
+    let _ = broker.ch_terminated.send(Void {});
     Ok(())
 }

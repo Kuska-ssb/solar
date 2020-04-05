@@ -9,9 +9,10 @@ use async_std::{
 };
 use futures::FutureExt;
 
-use crate::registry::*;
+use crate::broker::*;
+use crate::error::Result;
 
-pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
+pub async fn actor(server_pk: String, rpc_port: u16) -> Result<()> {
     let mut packets = Vec::new();
 
     for if_addr in get_if_addrs()? {
@@ -35,7 +36,7 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
             };
         }
     }
-    let reg = REGISTRY.lock().await.register("landiscover",false).await?;
+    let broker = BROKER.lock().await.register("landiscover",false).await?;
 
     let broadcast_list = packets
         .iter()
@@ -44,7 +45,7 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
         .join(",");
     info!("broadcast will be sent to {}", broadcast_list);
 
-    let mut ch_terminate = reg.ch_terminate.fuse();
+    let mut ch_terminate = broker.ch_terminate.fuse();
 
     loop {
         select_biased! {
@@ -64,6 +65,6 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
           }
         }
     }
-    let _ = reg.ch_terminated.send(Void {});
+    let _ = broker.ch_terminated.send(Void {});
     Ok(())
 }

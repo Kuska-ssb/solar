@@ -5,27 +5,26 @@ use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
+use crate::error::Result;
+use crate::storage::{StorageEvent,ChStoSend,ChStoRecv};
+
 #[derive(Debug)]
 pub struct Void {}
 
-pub type ChStoRecv = mpsc::UnboundedReceiver<String>;
-pub type ChStoSend = mpsc::UnboundedSender<String>;
-pub type ChRegevSend = mpsc::UnboundedSender<Event>;
+pub type ChBrokerSend = mpsc::UnboundedSender<BrokerEvent>;
 pub type ChSigSend = oneshot::Sender<Void>;
 pub type ChSigRecv = oneshot::Receiver<Void>;
 
-pub type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
-
 #[derive(Debug)]
-pub enum Event {
-    Connect(RegistryEndpoint),
+pub enum BrokerEvent {
+    Connect(BrokerEndpoint),
     Disconnect { actor_id: usize },
-    IdUpdated(String),
+    Storage(StorageEvent),
     Terminate,
 }
 
 #[derive(Debug)]
-pub struct RegistryEndpoint {
+pub struct BrokerEndpoint {
     pub actor_id: usize,
     pub ch_terminate: ChSigSend,
     pub ch_terminated: ChSigRecv,
@@ -36,7 +35,7 @@ pub struct RegistryEndpoint {
 pub struct ActorEndpoint {
     pub actor_id: usize,
 
-    pub ch_registry: ChRegevSend,
+    pub ch_broker: ChBrokerSend,
     pub ch_terminate: ChSigRecv,
     pub ch_terminated: ChSigSend,
 
@@ -44,15 +43,15 @@ pub struct ActorEndpoint {
 }
 
 #[derive(Debug)]
-pub struct Registry {
+pub struct Broker {
     last_actor_id: usize,
-    sender: ChRegevSend,
+    sender: ChBrokerSend,
     msgloop: Option<JoinHandle<()>>,
 }
 
-pub static REGISTRY: Lazy<Mutex<Registry>> = Lazy::new(|| Mutex::new(Registry::new()));
+pub static BROKER: Lazy<Mutex<Broker>> = Lazy::new(|| Mutex::new(Broker::new()));
 
-impl Registry {
+impl Broker {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded();
         let msgloop = task::spawn(Self::msg_loop(receiver));
@@ -65,7 +64,7 @@ impl Registry {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(&mut self, name: &str, storage_notify :bool) -> AnyResult<ActorEndpoint> {
+    pub async fn register(&mut self, name: &str, storage_notify :bool) -> Result<ActorEndpoint> {
         self.last_actor_id += 1;
 
         info!("Registering actor {}={}", self.last_actor_id, name);
@@ -74,13 +73,13 @@ impl Registry {
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
 
         let (sto_sender, sto_receiver) = if storage_notify {
-            let (s,r) = mpsc::unbounded::<String>();
+            let (s,r) = mpsc::unbounded::<StorageEvent>();
             (Some(s),Some(r))
         } else {
             (None,None)
         };
 
-        let registry_endpoint = RegistryEndpoint {
+        let broker_endpoint = BrokerEndpoint {
             actor_id: self.last_actor_id,
             ch_terminate: terminate_sender,
             ch_terminated: terminated_receiver,
@@ -88,26 +87,26 @@ impl Registry {
         };
         let actor_endpoint = ActorEndpoint {
             actor_id: self.last_actor_id,
-            ch_registry: self.sender.clone(),
+            ch_broker: self.sender.clone(),
             ch_terminate: terminate_receiver,
             ch_terminated: terminated_sender,
             ch_storage : sto_receiver,
         };
 
         self.sender
-            .send(Event::Connect(registry_endpoint))
+            .send(BrokerEvent::Connect(broker_endpoint))
             .await
             .unwrap();
 
         Ok(actor_endpoint)
     }
-    pub fn create_sender(&self) -> ChRegevSend {
+    pub fn create_sender(&self) -> ChBrokerSend {
         self.sender.clone()
     }
 
     pub fn spawn<F>(fut: F) -> task::JoinHandle<()>
     where
-        F: Future<Output = AnyResult<()>> + Send + 'static,
+        F: Future<Output = Result<()>> + Send + 'static,
     {
         task::spawn(async move {
             if let Err(e) = fut.await {
@@ -115,8 +114,8 @@ impl Registry {
             }
         })
     }
-    async fn msg_loop(mut events: mpsc::UnboundedReceiver<Event>) {
-        let mut actors: HashMap<usize, RegistryEndpoint> = HashMap::new();
+    async fn msg_loop(mut events: mpsc::UnboundedReceiver<BrokerEvent>) {
+        let mut actors: HashMap<usize, BrokerEndpoint> = HashMap::new();
 
         loop {
             let event = select! {
@@ -126,22 +125,22 @@ impl Registry {
                 },
             };
             match event {
-                Event::Terminate => {
+                BrokerEvent::Terminate => {
                     info!("Msg Got terminate ");
                     break;
                 }
-                Event::Connect(actor) => {
+                BrokerEvent::Connect(actor) => {
                     debug!("Registering actor {}", actor.actor_id);
                     actors.insert(actor.actor_id, actor);
                 }
-                Event::Disconnect { actor_id } => {
+                BrokerEvent::Disconnect { actor_id } => {
                     debug!("Unregistering actor {}", actor_id);
                     actors.remove(&actor_id);
                 }
-                Event::IdUpdated(id) => {
+                BrokerEvent::Storage(event) => {
                     for actor in actors.values_mut() {
                         if let Some(ch) = &mut actor.ch_storage {
-                            let _ = ch.send(id.clone()).await;
+                            let _ = ch.send(event.clone()).await;
                         }
                     }                    
                 }
