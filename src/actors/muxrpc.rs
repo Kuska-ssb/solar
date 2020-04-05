@@ -14,14 +14,14 @@ use kuska_ssb::{
     rpc::RpcStream,
 };
 
-use crate::storage::ChStoRecv;
 use crate::broker::*;
 use crate::error::AnyResult;
+use crate::storage::ChStoRecv;
 
-use super::rpcs::{RpcInput,RpcHandler,HistoryStreamHandler,GetHandler,WhoAmIHandler};
+use super::rpcs::{GetHandler, HistoryStreamHandler, RpcHandler, RpcInput, WhoAmIHandler};
 
 pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> AnyResult<()> {
-    let broker = BROKER.lock().await.register("sbot-listener",false).await?;
+    let broker = BROKER.lock().await.register("sbot-listener", false).await?;
 
     let mut ch_terminate = broker.ch_terminate.fuse();
 
@@ -71,15 +71,16 @@ async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> A
         actor_id,
         ..
     } = broker;
-    let res = sbot_loop(
-        ch_terminate,ch_storage.unwrap(),
-        &mut api, id, peer_ssb_id).await;
+    let res = sbot_loop(ch_terminate, ch_storage.unwrap(), &mut api, id, peer_ssb_id).await;
 
     if let Err(err) = res {
         warn!("client terminated with error {:?}", err);
     }
 
-    ch_broker.send(BrokerEvent::Disconnect { actor_id }).await.unwrap();
+    ch_broker
+        .send(BrokerEvent::Disconnect { actor_id })
+        .await
+        .unwrap();
     Ok(())
 }
 
@@ -96,7 +97,7 @@ async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     let mut whoami_handler = WhoAmIHandler::new(&peer_ssb_id);
     let mut get_handler = GetHandler::default();
 
-    let mut handlers : Vec<&mut dyn RpcHandler<R,W>>= vec![
+    let mut handlers: Vec<&mut dyn RpcHandler<R, W>> = vec![
         &mut history_stream_handler,
         &mut whoami_handler,
         &mut get_handler,
@@ -126,13 +127,13 @@ async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
         };
         let mut handled = false;
         for handler in handlers.iter_mut() {
-            if handler.handle(api,&input).await? {
+            if handler.handle(api, &input).await? {
                 handled = true;
                 break;
             }
         }
         if !handled {
-            trace!("message not processed: {:?}",input);
+            trace!("message not processed: {:?}", input);
         }
     }
 

@@ -12,12 +12,12 @@ use kuska_ssb::keystore::{read_patchwork_config, write_patchwork_config, OwnedId
 
 mod actors;
 mod broker;
-mod storage;
 mod error;
+mod storage;
 
 use broker::*;
-use storage::DB;
 use error::AnyResult;
+use storage::DB;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
@@ -55,7 +55,9 @@ async fn main() -> AnyResult<()> {
         base64::encode(&server_id.pk[..])
     );
 
-    DB.write().await.open(&db_folder,BROKER.lock().await.create_sender())?;
+    DB.write()
+        .await
+        .open(&db_folder, BROKER.lock().await.create_sender())?;
 
     Broker::spawn(actors::ctrlc::actor());
     Broker::spawn(actors::landiscovery::actor(

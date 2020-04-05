@@ -36,7 +36,7 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
             };
         }
     }
-    let broker = BROKER.lock().await.register("landiscover",false).await?;
+    let broker = BROKER.lock().await.register("landiscover", false).await?;
 
     let broadcast_list = packets
         .iter()

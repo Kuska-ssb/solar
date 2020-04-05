@@ -5,7 +5,7 @@ use crate::broker::*;
 use crate::error::AnyResult;
 
 pub async fn actor() -> AnyResult<()> {
-    let mut broker = BROKER.lock().await.register("crtlc",false).await?;
+    let mut broker = BROKER.lock().await.register("crtlc", false).await?;
 
     let ctrlc = CtrlC::new().expect("cannot create Ctrl+C handler?");
     ctrlc.await;

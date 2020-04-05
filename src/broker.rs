@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::collections::hash_map::HashMap;
 
 use crate::error::AnyResult;
-use crate::storage::{StorageEvent,ChStoSend,ChStoRecv};
+use crate::storage::{ChStoRecv, ChStoSend, StorageEvent};
 
 #[derive(Debug)]
 pub struct Void {}
@@ -64,7 +64,7 @@ impl Broker {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(&mut self, name: &str, storage_notify :bool) -> AnyResult<ActorEndpoint> {
+    pub async fn register(&mut self, name: &str, storage_notify: bool) -> AnyResult<ActorEndpoint> {
         self.last_actor_id += 1;
 
         info!("Registering actor {}={}", self.last_actor_id, name);
@@ -73,10 +73,10 @@ impl Broker {
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
 
         let (sto_sender, sto_receiver) = if storage_notify {
-            let (s,r) = mpsc::unbounded::<StorageEvent>();
-            (Some(s),Some(r))
+            let (s, r) = mpsc::unbounded::<StorageEvent>();
+            (Some(s), Some(r))
         } else {
-            (None,None)
+            (None, None)
         };
 
         let broker_endpoint = BrokerEndpoint {
@@ -90,7 +90,7 @@ impl Broker {
             ch_broker: self.sender.clone(),
             ch_terminate: terminate_receiver,
             ch_terminated: terminated_sender,
-            ch_storage : sto_receiver,
+            ch_storage: sto_receiver,
         };
 
         self.sender
@@ -142,7 +142,7 @@ impl Broker {
                         if let Some(ch) = &mut actor.ch_storage {
                             let _ = ch.send(event.clone()).await;
                         }
-                    }                    
+                    }
                 }
             }
         }
