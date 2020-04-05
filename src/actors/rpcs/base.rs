@@ -14,10 +14,10 @@ pub enum RpcInput {
 }
 
 #[async_trait]
-pub trait RpcHandler<R,W>: Send + Sync
+pub trait RpcHandler<R, W>: Send + Sync
 where
     R: Read + Unpin + Send + Sync,
-    W: Write + Unpin + Send + Sync
+    W: Write + Unpin + Send + Sync,
 {
     async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool>;
 }

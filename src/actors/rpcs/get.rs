@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use async_std::io::{Read, Write};
+use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use kuska_ssb::{
@@ -12,37 +12,37 @@ use crate::storage::DB;
 
 use super::{RpcHandler, RpcInput};
 
-pub struct GetHandler<R,W> 
+pub struct GetHandler<R, W>
 where
     R: Read + Unpin + Send + Sync,
-    W: Write + Unpin + Send + Sync
+    W: Write + Unpin + Send + Sync,
 {
-    phantom: PhantomData<(R,W)>
+    phantom: PhantomData<(R, W)>,
 }
 
-impl<R,W> Default for GetHandler<R,W>
+impl<R, W> Default for GetHandler<R, W>
 where
     R: Read + Unpin + Send + Sync,
-    W: Write + Unpin + Send + Sync
+    W: Write + Unpin + Send + Sync,
 {
     fn default() -> Self {
-        Self {phantom : PhantomData}
+        Self {
+            phantom: PhantomData,
+        }
     }
 }
 
 #[async_trait]
-impl<R,W> RpcHandler<R, W> for GetHandler<R,W>
+impl<R, W> RpcHandler<R, W> for GetHandler<R, W>
 where
     R: Read + Unpin + Send + Sync,
-    W: Write + Unpin + Send + Sync
+    W: Write + Unpin + Send + Sync,
 {
     async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> AnyResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
-                    Some(ApiMethod::Get) => {
-                        self.recv_get(api, *req_no, req).await
-                    }
+                    Some(ApiMethod::Get) => self.recv_get(api, *req_no, req).await,
                     _ => Ok(false),
                 }
             }
@@ -51,16 +51,16 @@ where
     }
 }
 
-impl<R,W> GetHandler<R,W>
+impl<R, W> GetHandler<R, W>
 where
     R: Read + Unpin + Send + Sync,
-    W: Write + Unpin + Send + Sync
+    W: Write + Unpin + Send + Sync,
 {
     async fn recv_get(
         &mut self,
         api: &mut ApiHelper<R, W>,
         req_no: i32,
-        req: &rpc::Body
+        req: &rpc::Body,
     ) -> AnyResult<bool> {
         let args: Vec<String> = serde_json::from_value(req.args.clone())?;
         let msg = DB.read().await.get_message(&args[0]);
