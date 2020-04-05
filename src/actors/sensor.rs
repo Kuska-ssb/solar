@@ -7,9 +7,9 @@ use kuska_ssb::{api::msgs::Post, feed::Message, keystore::OwnedIdentity};
 
 use crate::broker::*;
 use crate::storage::DB;
-use crate::error::Result;
+use crate::error::AnyResult;
 
-pub async fn actor(server_id: OwnedIdentity) -> Result<()> {
+pub async fn actor(server_id: OwnedIdentity) -> AnyResult<()> {
     let broker = BROKER.lock().await.register("sensor",false).await?;
     let mut ch_terminate = broker.ch_terminate.fuse();
 
@@ -28,7 +28,7 @@ pub async fn actor(server_id: OwnedIdentity) -> Result<()> {
               let markdown = format!("Sensor recording... current temperature is {:?}",std::time::SystemTime::now());
               let post = Post::new(markdown, None).to_msg()?;
               let msg = Message::sign(last_msg.as_ref(), &server_id, post)?;
-              info!("Adding {:?}",msg);
+              info!("Adding message {}",msg.sequence());
               let next_id = db.append_feed(msg).await?;
 
               println!("Recoding sensor data {} ...",next_id);

@@ -10,9 +10,9 @@ use async_std::{
 use futures::FutureExt;
 
 use crate::broker::*;
-use crate::error::Result;
+use crate::error::AnyResult;
 
-pub async fn actor(server_pk: String, rpc_port: u16) -> Result<()> {
+pub async fn actor(server_pk: String, rpc_port: u16) -> AnyResult<()> {
     let mut packets = Vec::new();
 
     for if_addr in get_if_addrs()? {
