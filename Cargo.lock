@@ -667,6 +667,7 @@ dependencies = [
 [[package]]
 name = "kuska-ssb"
 version = "0.1.4"
+source = "git+https://github.com/Kuska-ssb/kuska-ssb#a84060c54d6e5db322aed1c46a55b6a078f7c7a7"
 dependencies = [
  "async-std",
  "base64 0.11.0",
