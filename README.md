@@ -11,5 +11,6 @@ Current status is:
 - [X] mux-rpc implementation
   - [X] `whoami`
   - [X] `get`
-  - [X] `createHistoryStream`
+  - [X] `createHistoryStream` 
+  - [X] `blobs createaWants` & `blobs get` 
 - [X] patchwork and cryptoscope interoperability
