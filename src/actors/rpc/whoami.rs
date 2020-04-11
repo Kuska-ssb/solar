@@ -39,6 +39,10 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
+    fn name(&self) -> &'static str {
+        "WhoAmIHandler"
+    }
+
     async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {

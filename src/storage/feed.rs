@@ -1,6 +1,4 @@
-use async_std::sync::{Arc, RwLock};
 use futures::SinkExt;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_cbor;
 
@@ -21,9 +19,7 @@ pub enum StorageEvent {
 pub type ChStoRecv = mpsc::UnboundedReceiver<StorageEvent>;
 pub type ChStoSend = mpsc::UnboundedSender<StorageEvent>;
 
-pub static DB: Lazy<Arc<RwLock<Storage>>> = Lazy::new(|| Arc::new(RwLock::new(Storage::default())));
-
-pub struct Storage {
+pub struct FeedStorage {
     db: Option<sled::Db>,
     ch_broker: Option<ChBrokerSend>,
 }
@@ -69,14 +65,16 @@ impl From<serde_cbor::Error> for Error {
 impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl Storage {
-    pub fn default() -> Self {
+impl Default for FeedStorage {
+    fn default() -> Self {
         Self {
             db: None,
             ch_broker: None,
         }
     }
+}
 
+impl FeedStorage {
     pub fn open(&mut self, path: &std::path::Path, ch_broker: ChBrokerSend) -> Result<()> {
         self.db = Some(sled::open(path)?);
         self.ch_broker = Some(ch_broker);

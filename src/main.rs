@@ -5,10 +5,16 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate get_if_addrs;
+extern crate plotters;
+extern crate procfs;
+extern crate sha2;
+extern crate slice_deque;
 
 use async_std::fs::File;
 
+use async_std::sync::{Arc, RwLock};
 use kuska_ssb::keystore::{read_patchwork_config, write_patchwork_config, OwnedIdentity};
+use once_cell::sync::Lazy;
 
 mod actors;
 mod broker;
@@ -17,10 +23,16 @@ mod storage;
 
 use broker::*;
 use error::SolarResult;
-use storage::DB;
+use storage::blob::BlobStorage;
+use storage::feed::FeedStorage;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
+
+pub static FEED_STORAGE: Lazy<Arc<RwLock<FeedStorage>>> =
+    Lazy::new(|| Arc::new(RwLock::new(FeedStorage::default())));
+pub static BLOB_STORAGE: Lazy<Arc<RwLock<BlobStorage>>> =
+    Lazy::new(|| Arc::new(RwLock::new(BlobStorage::default())));
 
 #[async_std::main]
 async fn main() -> SolarResult<()> {
@@ -32,10 +44,14 @@ async fn main() -> SolarResult<()> {
     println!("Base configuration is {:?}", base_path);
 
     let mut key_file = base_path.clone();
-    let mut db_folder = base_path;
+    let mut feeds_folder = base_path.clone();
+    let mut blobs_folder = base_path;
 
     key_file.push("secret");
-    db_folder.push("db");
+    feeds_folder.push("feeds");
+    blobs_folder.push("blobs");
+    std::fs::create_dir_all(&feeds_folder)?;
+    std::fs::create_dir_all(&blobs_folder)?;
 
     let server_id = if !key_file.is_file() {
         println!("Private key not found, generated new one in {:?}", key_file);
@@ -55,9 +71,12 @@ async fn main() -> SolarResult<()> {
         base64::encode(&server_id.pk[..])
     );
 
-    DB.write()
+    FEED_STORAGE
+        .write()
         .await
-        .open(&db_folder, BROKER.lock().await.create_sender())?;
+        .open(&feeds_folder, BROKER.lock().await.create_sender())?;
+
+    BLOB_STORAGE.write().await.open(blobs_folder);
 
     Broker::spawn(actors::ctrlc::actor());
     Broker::spawn(actors::landiscovery::actor(

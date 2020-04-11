@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::collections::hash_map::HashMap;
 
 use crate::error::SolarResult;
-use crate::storage::{ChStoRecv, ChStoSend, StorageEvent};
+use crate::storage::feed::{ChStoRecv, ChStoSend, StorageEvent};
 
 #[derive(Debug)]
 pub struct Void {}
@@ -64,10 +64,14 @@ impl Broker {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(&mut self, name: &str, storage_notify: bool) -> SolarResult<ActorEndpoint> {
+    pub async fn register(
+        &mut self,
+        name: &str,
+        storage_notify: bool,
+    ) -> SolarResult<ActorEndpoint> {
         self.last_actor_id += 1;
 
-        info!("Registering actor {}={}", self.last_actor_id, name);
+        trace!(target:"solar-actor","registering actor {}={}", self.last_actor_id, name);
 
         let (terminate_sender, terminate_receiver) = oneshot::channel::<Void>();
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
@@ -130,11 +134,11 @@ impl Broker {
                     break;
                 }
                 BrokerEvent::Connect(actor) => {
-                    debug!("Registering actor {}", actor.actor_id);
+                    trace!(target:"solar-actor", "Registering actor {}", actor.actor_id);
                     actors.insert(actor.actor_id, actor);
                 }
                 BrokerEvent::Disconnect { actor_id } => {
-                    debug!("Unregistering actor {}", actor_id);
+                    trace!(target:"solar-actor","Unregistering actor {}", actor_id);
                     actors.remove(&actor_id);
                 }
                 BrokerEvent::Storage(event) => {
@@ -159,13 +163,13 @@ impl Broker {
             .unzip();
 
         for (actor_id, term) in terms {
-            info!("Sending term signal to {}", actor_id);
+            trace!(target:"solar-actor","Sending term signal to {}", actor_id);
             let _ = term.send(Void {});
         }
 
         // wait to be finished
         for (actor_id, termd) in termds {
-            info!("Waiting termd signal from {}", actor_id);
+            trace!(target:"solar-actor","Waiting termd signal from {}", actor_id);
             let _ = termd.await;
         }
         drop(actors);

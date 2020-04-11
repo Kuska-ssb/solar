@@ -4,11 +4,12 @@ use async_trait::async_trait;
 use kuska_ssb::{api::ApiHelper, rpc::RecvMsg};
 
 use crate::error::SolarResult;
-use crate::storage::StorageEvent;
+use crate::storage::feed::StorageEvent;
 
 #[derive(Debug)]
 pub enum RpcInput {
     None,
+    Timer,
     Network(i32, RecvMsg),
     Storage(StorageEvent),
 }
@@ -19,5 +20,6 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
+    fn name(&self) -> &'static str;
     async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool>;
 }

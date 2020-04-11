@@ -57,7 +57,7 @@ pub async fn actor(server_pk: String, rpc_port: u16) -> SolarResult<()> {
                     let _ = socket.set_broadcast(true);
                     let dest = format!("255.255.255.255:{}",rpc_port);
                     match socket.send_to(msg.2.as_bytes(),dest).await {
-                        Err(err) => debug!("err {}",err),
+                        Err(err) => warn!("Error broadcasting {}",err),
                         _ => {},
                     }
                 }

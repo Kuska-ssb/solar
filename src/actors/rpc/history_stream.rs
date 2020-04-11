@@ -6,19 +6,19 @@ use async_std::io::{Read, Write};
 use async_trait::async_trait;
 
 use kuska_ssb::{
-    api::{ApiHelper, ApiMethod, CreateHistoryStreamArgs},
+    api::{dto, ApiHelper, ApiMethod},
     rpc,
 };
 
 use crate::error::SolarResult;
-use crate::storage::StorageEvent;
-use crate::storage::DB;
+use crate::storage::feed::StorageEvent;
+use crate::FEED_STORAGE;
 
 use super::{RpcHandler, RpcInput};
 
 struct HistoryStreamRequest {
     req_no: i32,
-    args: CreateHistoryStreamArgs,
+    args: dto::CreateHistoryStreamIn,
     from: u64,
 }
 
@@ -50,6 +50,10 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
+    fn name(&self) -> &'static str {
+        "HistoryStreamHandler"
+    }
+
     async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
@@ -85,7 +89,7 @@ where
         req_no: i32,
         req: &rpc::Body,
     ) -> SolarResult<bool> {
-        let mut args: Vec<CreateHistoryStreamArgs> = serde_json::from_value(req.args.clone())?;
+        let mut args: Vec<dto::CreateHistoryStreamIn> = serde_json::from_value(req.args.clone())?;
 
         let args = args.pop().unwrap();
         let from = args.seq.unwrap_or(1u64);
@@ -164,21 +168,24 @@ where
             format!("@{}", req.args.id).to_string()
         };
 
-        let last = DB.read().await.get_feed_len(&req_id)?.map_or(0, |x| x + 1);
+        let last = FEED_STORAGE
+            .read()
+            .await
+            .get_feed_len(&req_id)?
+            .map_or(0, |x| x + 1);
         let with_keys = req.args.keys.unwrap_or(true);
 
         info!(
-            "Sending history stream of {} ({}..{})",
+            "Sending history stream {} ({}..{})",
             req.args.id, req.from, last
         );
         for n in req.from..last {
-            let data = DB.read().await.get_feed(&req_id, n - 1)?;
+            let data = FEED_STORAGE.read().await.get_feed(&req_id, n - 1)?;
             let data = if with_keys {
                 data.to_string()
             } else {
                 data.value.to_string()
             };
-            info!(" - [with_keys={}]{}", with_keys, &data.to_string());
             api.feed_res_send(req.req_no, &data).await?;
         }
 

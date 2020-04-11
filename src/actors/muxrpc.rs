@@ -1,13 +1,17 @@
+use std::time::Duration;
+
 use async_std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream, ToSocketAddrs},
     prelude::*,
+    task,
 };
+
 use futures::{select, FutureExt, SinkExt};
 
 use kuska_handshake::async_std::{handshake_server, BoxStream};
 use kuska_ssb::{
-    api::{ApiHelper, CreateHistoryStreamArgs},
+    api::{dto, ApiHelper},
     crypto::ToSsbId,
     discovery::ssb_net_id,
     keystore::OwnedIdentity,
@@ -16,9 +20,11 @@ use kuska_ssb::{
 
 use crate::broker::*;
 use crate::error::SolarResult;
-use crate::storage::ChStoRecv;
+use crate::storage::feed::ChStoRecv;
 
-use super::rpcs::{GetHandler, HistoryStreamHandler, RpcHandler, RpcInput, WhoAmIHandler};
+use super::rpc::{
+    BlobsHandler, GetHandler, HistoryStreamHandler, RpcHandler, RpcInput, WhoAmIHandler,
+};
 
 pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> SolarResult<()> {
     let broker = BROKER.lock().await.register("sbot-listener", false).await?;
@@ -56,7 +62,7 @@ async fn handle_connection(mut stream: TcpStream, server_id: OwnedIdentity) -> S
     let handshake =
         handshake_server(&mut stream, ssb_net_id(), server_pk, server_sk.clone()).await?;
     let peer_ssb_id = handshake.peer_pk.to_ssb_id();
-    info!("💃 handshake complete, user {}", &peer_ssb_id);
+    info!("💃 peer connected {}", &peer_ssb_id);
 
     let (box_stream_read, box_stream_write) =
         BoxStream::from_handshake(&stream, &stream, handshake, 0x8000).split_read_write();
@@ -96,15 +102,17 @@ async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     let mut history_stream_handler = HistoryStreamHandler::default();
     let mut whoami_handler = WhoAmIHandler::new(&peer_ssb_id);
     let mut get_handler = GetHandler::default();
+    let mut blobs_handler = BlobsHandler::default();
 
     let mut handlers: Vec<&mut dyn RpcHandler<R, W>> = vec![
         &mut history_stream_handler,
         &mut whoami_handler,
         &mut get_handler,
+        &mut blobs_handler,
     ];
 
     // why this is requiered? i cannot remember it :(
-    let args = CreateHistoryStreamArgs::new(server_ssb_id.clone());
+    let args = dto::CreateHistoryStreamIn::new(server_ssb_id.clone());
     let _initial_chs_req_id = api.create_history_stream_req_send(&args).await?;
 
     loop {
@@ -115,21 +123,30 @@ async fn sbot_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
           },
           id = ch_storage.next().fuse() => {
             if let Some(id) = id {
-                info!("got user change : {:?}",id);
                 RpcInput::Storage(id)
             } else {
                 RpcInput::None
             }
           },
+          _ = task::sleep(Duration::from_secs(1)).fuse() => {
+            RpcInput::Timer
+          },
           value = ch_terminate =>  {
             break;
-          }
+          },
         };
         let mut handled = false;
         for handler in handlers.iter_mut() {
-            if handler.handle(api, &input).await? {
-                handled = true;
-                break;
+            match handler.handle(api, &input).await {
+                Ok(has_been_handled) => {
+                    if has_been_handled {
+                        handled = true;
+                        break;
+                    }
+                }
+                Err(err) => {
+                    error!("handler {} failed with {:?}", handler.name(), err);
+                }
             }
         }
         if !handled {
