@@ -1,3 +1,4 @@
+serde = { version = "1.0.104", features = ["derive"] }
 [package]
 name = "solar"
 version = "0.1.0"
@@ -35,3 +36,4 @@ sha2 = "0.8.1"
 plotters = "0.2.12"
 procfs = "0.7.8"
 slice-deque = "0.3.0"
+toml = "0.5.6"

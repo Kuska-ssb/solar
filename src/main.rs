@@ -9,19 +9,25 @@ extern crate plotters;
 extern crate procfs;
 extern crate sha2;
 extern crate slice_deque;
+#[macro_use]
+extern crate serde;
+extern crate toml;
 
 use async_std::fs::File;
+use async_std::io::ReadExt;
+use async_std::prelude::*;
 
 use async_std::sync::{Arc, RwLock};
-use kuska_ssb::keystore::{read_patchwork_config, write_patchwork_config, OwnedIdentity};
 use once_cell::sync::Lazy;
 
 mod actors;
 mod broker;
+mod config;
 mod error;
 mod storage;
 
 use broker::*;
+use config::Config;
 use error::SolarResult;
 use storage::blob::BlobStorage;
 use storage::feed::FeedStorage;
@@ -47,28 +53,30 @@ async fn main() -> SolarResult<()> {
     let mut feeds_folder = base_path.clone();
     let mut blobs_folder = base_path;
 
-    key_file.push("secret");
+    key_file.push("solar.toml");
     feeds_folder.push("feeds");
     blobs_folder.push("blobs");
     std::fs::create_dir_all(&feeds_folder)?;
     std::fs::create_dir_all(&blobs_folder)?;
 
-    let server_id = if !key_file.is_file() {
+    let config = if !key_file.is_file() {
         println!("Private key not found, generated new one in {:?}", key_file);
-
-        let id = OwnedIdentity::create();
+        let config = Config::create();
         let mut file = File::create(key_file).await?;
-        write_patchwork_config(&id, &mut file).await?;
-        id
+        file.write_all(&config.to_toml()?).await?;
+        config
     } else {
         let mut file = File::open(key_file).await?;
-        read_patchwork_config(&mut file).await?
+        let mut raw: Vec<u8> = Vec::new();
+        file.read_to_end(&mut raw).await?;
+        Config::from_toml(&raw)?
     };
+    let owned_id = config.owned_identity()?;
 
     println!(
         "Server started on {}:{}",
         LISTEN,
-        base64::encode(&server_id.pk[..])
+        base64::encode(&owned_id.pk[..])
     );
 
     FEED_STORAGE
@@ -80,11 +88,11 @@ async fn main() -> SolarResult<()> {
 
     Broker::spawn(actors::ctrlc::actor());
     Broker::spawn(actors::landiscovery::actor(
-        base64::encode(&server_id.pk[..]),
+        base64::encode(&owned_id.pk[..]),
         RPC_PORT,
     ));
-    Broker::spawn(actors::sensor::actor(server_id.clone()));
-    Broker::spawn(actors::muxrpc::actor(server_id, LISTEN));
+    Broker::spawn(actors::sensor::actor(owned_id.clone()));
+    Broker::spawn(actors::muxrpc::actor(owned_id, LISTEN));
 
     let msgloop = BROKER.lock().await.take_msgloop();
     msgloop.await;
