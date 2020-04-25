@@ -8,7 +8,7 @@ use kuska_ssb::{
 };
 
 use crate::error::SolarResult;
-use crate::FEED_STORAGE;
+use crate::KV_STORAGE;
 
 use super::{RpcHandler, RpcInput};
 
@@ -67,9 +67,12 @@ where
         req: &rpc::Body,
     ) -> SolarResult<bool> {
         let args: Vec<String> = serde_json::from_value(req.args.clone())?;
-        let msg = FEED_STORAGE.read().await.get_message(&args[0]);
+        let msg = KV_STORAGE.read().await.get_message(&args[0]);
         match msg {
-            Ok(msg) => api.get_res_send(req_no, &msg).await?,
+            Ok(Some(msg)) => api.get_res_send(req_no, &msg).await?,
+            Ok(None) => {
+                api.rpc().send_error(req_no, req.rpc_type, "not found").await?
+            }
             Err(err) => {
                 let msg = format!("{}", err);
                 api.rpc().send_error(req_no, req.rpc_type, &msg).await?

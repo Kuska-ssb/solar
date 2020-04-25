@@ -2,6 +2,7 @@ use super::error::SolarResult;
 use kuska_ssb::crypto::ToSodiumObject;
 use kuska_ssb::crypto::ToSsbId;
 use kuska_ssb::keystore::OwnedIdentity;
+
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub id: String,

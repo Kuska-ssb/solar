@@ -18,7 +18,7 @@ use async_std::io::ReadExt;
 use async_std::prelude::*;
 
 use async_std::sync::{Arc, RwLock};
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 
 mod actors;
 mod broker;
@@ -30,15 +30,16 @@ use broker::*;
 use config::Config;
 use error::SolarResult;
 use storage::blob::BlobStorage;
-use storage::feed::FeedStorage;
+use storage::kv::KvStorage;
 
 const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
 
-pub static FEED_STORAGE: Lazy<Arc<RwLock<FeedStorage>>> =
-    Lazy::new(|| Arc::new(RwLock::new(FeedStorage::default())));
+pub static KV_STORAGE: Lazy<Arc<RwLock<KvStorage>>> =
+    Lazy::new(|| Arc::new(RwLock::new(KvStorage::default())));
 pub static BLOB_STORAGE: Lazy<Arc<RwLock<BlobStorage>>> =
     Lazy::new(|| Arc::new(RwLock::new(BlobStorage::default())));
+pub static CONFIG: OnceCell<Config> = OnceCell::new();
 
 #[async_std::main]
 async fn main() -> SolarResult<()> {
@@ -71,7 +72,9 @@ async fn main() -> SolarResult<()> {
         file.read_to_end(&mut raw).await?;
         Config::from_toml(&raw)?
     };
+
     let owned_id = config.owned_identity()?;
+    let _err = CONFIG.set(config);
 
     println!(
         "Server started on {}:{}",
@@ -79,7 +82,7 @@ async fn main() -> SolarResult<()> {
         base64::encode(&owned_id.pk[..])
     );
 
-    FEED_STORAGE
+    KV_STORAGE
         .write()
         .await
         .open(&feeds_folder, BROKER.lock().await.create_sender())?;
@@ -87,12 +90,9 @@ async fn main() -> SolarResult<()> {
     BLOB_STORAGE.write().await.open(blobs_folder);
 
     Broker::spawn(actors::ctrlc::actor());
-    Broker::spawn(actors::landiscovery::actor(
-        base64::encode(&owned_id.pk[..]),
-        RPC_PORT,
-    ));
+    Broker::spawn(actors::lan_discovery::actor(owned_id.clone(),RPC_PORT));
     Broker::spawn(actors::sensor::actor(owned_id.clone()));
-    Broker::spawn(actors::muxrpc::actor(owned_id, LISTEN));
+    Broker::spawn(actors::tcp_server::actor(owned_id, LISTEN));
 
     let msgloop = BROKER.lock().await.take_msgloop();
     msgloop.await;

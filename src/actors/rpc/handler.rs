@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use kuska_ssb::{api::ApiHelper, rpc::RecvMsg};
 
 use crate::error::SolarResult;
-use crate::storage::feed::StorageEvent;
+use crate::storage::kv::StorageEvent;
 
 #[derive(Debug)]
 pub enum RpcInput {

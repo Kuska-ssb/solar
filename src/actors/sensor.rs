@@ -11,7 +11,7 @@ use kuska_ssb::{api::dto::content::Post, feed::Message, keystore::OwnedIdentity}
 
 use crate::broker::*;
 use crate::error::SolarResult;
-use crate::{BLOB_STORAGE, FEED_STORAGE};
+use crate::{BLOB_STORAGE, KV_STORAGE};
 
 pub async fn actor(server_id: OwnedIdentity) -> SolarResult<()> {
     let broker = BROKER.lock().await.register("sensor", false).await?;
@@ -32,13 +32,14 @@ pub async fn actor(server_id: OwnedIdentity) -> SolarResult<()> {
 }
 
 async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> SolarResult<()> {
-    let feed_storage = FEED_STORAGE.write().await;
+    let feed_storage = KV_STORAGE.write().await;
 
     let last_msg = if let Some(last_id) = feed_storage.get_feed_len(&server_id.id)? {
         Some(
             feed_storage
                 .get_feed(&server_id.id, last_id)?
-                .into_message()?,
+                .unwrap()
+                .into_message()?
         )
     } else {
         None

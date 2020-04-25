@@ -13,8 +13,8 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 kuska-handshake = { git = "https://github.com/Kuska-ssb/kuska-handshake", branch = "master" , features=["sync","async_std"] }
-kuska-ssb = { git ="https://github.com/Kuska-ssb/kuska-ssb", branch="master" }
-async-std = { version = "1.4.0", features=["unstable","attributes"] }
+kuska-ssb = { path = "../kuska-ssb" }
+async-std = { version = "1.0.1", features=["unstable","attributes"] }
 futures = "0.3.4"
 serde = { version = "1.0.104", features = ["derive"] }
 serde_json = { version = "1.0.48", features=["preserve_order","arbitrary_precision"] }
@@ -37,3 +37,4 @@ plotters = "0.2.12"
 procfs = "0.7.8"
 slice-deque = "0.3.0"
 toml = "0.5.6"
+regex = "1.3.7"

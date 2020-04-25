@@ -4,16 +4,18 @@ use std::string::ToString;
 
 use async_std::io::{Read, Write};
 use async_trait::async_trait;
+use regex::Regex;
 
 use kuska_ssb::{
     api::{dto, ApiHelper, ApiMethod},
+    feed::Feed,
     rpc,
 };
 
 use crate::error::SolarResult;
-use crate::storage::feed::StorageEvent;
-use crate::FEED_STORAGE;
-
+use crate::storage::kv::StorageEvent;
+use crate::KV_STORAGE;
+use crate::CONFIG;    
 use super::{RpcHandler, RpcInput};
 
 struct HistoryStreamRequest {
@@ -27,7 +29,9 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
+    initialized: bool,
     reqs: HashMap<String, HistoryStreamRequest>,
+    friends: HashMap<i32,String>, 
     phantom: PhantomData<(R, W)>,
 }
 
@@ -38,6 +42,8 @@ where
 {
     fn default() -> Self {
         Self {
+            initialized : false,
+            friends: HashMap::new(),
             reqs: HashMap::new(),
             phantom: PhantomData,
         }
@@ -64,6 +70,9 @@ where
                     _ => Ok(false),
                 }
             }
+            RpcInput::Network(req_no, rpc::RecvMsg::RpcResponse(_type, res)) => {
+                self.recv_rpc_response(api, *req_no, &res).await
+            }
             RpcInput::Network(req_no, rpc::RecvMsg::CancelStreamRespose()) => {
                 self.recv_cancelstream(api, *req_no).await
             }
@@ -72,6 +81,9 @@ where
             }
             RpcInput::Storage(StorageEvent::IdChanged(id)) => {
                 self.recv_storageevent_idchanged(api, id).await
+            }
+            RpcInput::Timer => {
+                self.on_timer(api).await
             }
             _ => Ok(false),
         }
@@ -83,6 +95,44 @@ where
     R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
+    async fn on_timer(&mut self,api: &mut ApiHelper<R, W>) -> SolarResult<bool> {
+        if !self.initialized {
+            let args = dto::CreateHistoryStreamIn::new(CONFIG.get().unwrap().id.clone());
+            let _ = api.create_history_stream_req_send(&args).await?;            
+            for friend in &CONFIG.get().unwrap().friends {
+                let args = dto::CreateHistoryStreamIn::new(friend.to_string());
+                let id =  api.create_history_stream_req_send(&args).await?;
+                self.friends.insert(id, friend.to_string());
+            }
+        }
+        Ok(false)
+    }
+
+    async fn recv_rpc_response(
+        &mut self,
+        _api: &mut ApiHelper<R,W>,
+        req_no: i32,
+        res: &[u8]
+    ) -> SolarResult<bool> {
+        if self.friends.contains_key(&req_no) {
+            let msg = Feed::from_slice(res)?.into_message()?;
+            if Some(msg.sequence()) == KV_STORAGE.read().await.get_feed_len(&msg.id().to_string())? {
+                KV_STORAGE.write().await.append_feed(msg.clone()).await?;
+                let msg : Result<dto::content::TypedMessage,_> = serde_json::from_value(msg.value.clone());
+                if let Ok(dto::content::TypedMessage::Post{post}) = msg {
+                    let re = Regex::new(r"%[0-9A-Za-z/+=]*.sha256").unwrap();
+                    for cap in re.captures_iter(&post.text) {
+                        // if let Some(blob) = KV_STORAGE.get_blob(cap) {}
+                        println!("{:?}", &cap);
+                    }    
+                }
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     async fn recv_createhistorystream(
         &mut self,
         api: &mut ApiHelper<R, W>,
@@ -168,7 +218,7 @@ where
             format!("@{}", req.args.id).to_string()
         };
 
-        let last = FEED_STORAGE
+        let last = KV_STORAGE
             .read()
             .await
             .get_feed_len(&req_id)?
@@ -180,7 +230,7 @@ where
             req.args.id, req.from, last
         );
         for n in req.from..last {
-            let data = FEED_STORAGE.read().await.get_feed(&req_id, n - 1)?;
+            let data = KV_STORAGE.read().await.get_feed(&req_id, n - 1)?.unwrap();
             let data = if with_keys {
                 data.to_string()
             } else {

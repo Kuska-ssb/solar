@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::collections::hash_map::HashMap;
 
 use crate::error::SolarResult;
-use crate::storage::feed::{ChStoRecv, ChStoSend, StorageEvent};
+use crate::storage::kv::{ChStoRecv, ChStoSend, StorageEvent};
 
 #[derive(Debug)]
 pub struct Void {}
