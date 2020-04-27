@@ -9,6 +9,7 @@ use kuska_ssb::{
 
 use crate::error::SolarResult;
 use crate::KV_STORAGE;
+use crate::broker::ChBrokerSend;
 
 use super::{RpcHandler, RpcInput};
 
@@ -42,7 +43,7 @@ where
         "GetHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {

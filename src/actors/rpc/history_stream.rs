@@ -13,10 +13,11 @@ use kuska_ssb::{
 };
 
 use crate::error::SolarResult;
-use crate::storage::kv::StorageEvent;
 use crate::KV_STORAGE;
 use crate::CONFIG;    
 use super::{RpcHandler, RpcInput};
+use crate::storage::kv::StoKvEvent;
+use crate::broker::ChBrokerSend;
 
 struct HistoryStreamRequest {
     req_no: i32,
@@ -60,7 +61,7 @@ where
         "HistoryStreamHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput) -> SolarResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -79,8 +80,15 @@ where
             RpcInput::Network(req_no, rpc::RecvMsg::ErrorResponse(err)) => {
                 self.recv_error_response(api, *req_no, err).await
             }
-            RpcInput::Storage(StorageEvent::IdChanged(id)) => {
-                self.recv_storageevent_idchanged(api, id).await
+            RpcInput::Message(msg) => {
+                if let Some(kv_event) = msg.downcast_ref::<StoKvEvent>() {
+                    match kv_event {
+                        StoKvEvent::IdChanged(id) => {
+                            return self.recv_storageevent_idchanged(api, id).await
+                        }
+                    }
+                }
+                Ok(false)                
             }
             RpcInput::Timer => {
                 self.on_timer(api).await
@@ -122,6 +130,7 @@ where
                 if let Ok(dto::content::TypedMessage::Post{post}) = msg {
                     let re = Regex::new(r"%[0-9A-Za-z/+=]*.sha256").unwrap();
                     for cap in re.captures_iter(&post.text) {
+                        // enum RpcBlobsWantsEvent {    BroadcastWants(Vec<(String, i64)>)}
                         // if let Some(blob) = KV_STORAGE.get_blob(cap) {}
                         println!("{:?}", &cap);
                     }    

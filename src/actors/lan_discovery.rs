@@ -127,7 +127,7 @@ async fn process_broadcast(server_id: &OwnedIdentity, buff: &[u8]) -> SolarResul
     let msg = String::from_utf8_lossy(buff);
 
     if let Some((server,port,peer_pk)) = parse_broadcast(&msg) {   
-        Broker::spawn(super::peer::actor(server_id.clone(),super::peer::Connect::Announce{server,port,peer_pk}));
+        Broker::spawn(super::peer::actor(server_id.clone(),super::peer::Connect::TcpServer{server,port,peer_pk}));
     } else {
         warn!("failed to parse broadcast {}",msg);
     }

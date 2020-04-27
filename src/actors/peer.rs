@@ -31,15 +31,14 @@ use kuska_ssb::{
 
 use crate::broker::*;
 use crate::error::SolarResult;
-use crate::storage::kv::ChStoRecv;
 
 use super::rpc::{
-    BlobsHandler, GetHandler, HistoryStreamHandler, RpcHandler, RpcInput, WhoAmIHandler,
+    BlobsGetHandler, BlobsWantsHandler, GetHandler, HistoryStreamHandler, RpcHandler, RpcInput, WhoAmIHandler,
 };
 
 pub enum Connect {
-    Announce{ server: String, port: u32, peer_pk: ed25519::PublicKey },
-    Recieved{ stream: TcpStream }
+    TcpServer { server: String, port: u32, peer_pk: ed25519::PublicKey },
+    ClientStream { stream: TcpStream }
 }
 
 pub static CONNECTED_PEERS: Lazy<Arc<RwLock<HashSet<ed25519::PublicKey>>>> =
@@ -63,7 +62,7 @@ pub async fn actor_inner(
 
     let OwnedIdentity {pk,sk,..} = id;
     let (stream,handshake) = match connect {
-        Connect::Announce{server,port,peer_pk} => {
+        Connect::TcpServer{server,port,peer_pk} => {
             if CONNECTED_PEERS.read().await.contains(&peer_pk) {
                 return Ok(());
             }
@@ -74,7 +73,7 @@ pub async fn actor_inner(
 
             (stream,handshake)    
         }
-        Connect::Recieved{mut stream} => {
+        Connect::ClientStream{mut stream} => {
             let handshake = handshake_server(&mut stream, ssb_net_id(), pk, sk).await?;
             if CONNECTED_PEERS.read().await.contains(&handshake.peer_pk) {
                 return Ok(());
@@ -88,14 +87,14 @@ pub async fn actor_inner(
     let ActorEndpoint {
         ch_terminate,
         mut ch_broker,
-        ch_storage,
+        ch_msg,
         actor_id,
         ..
     } = BROKER.lock().await.register("peer", true).await?;
 
     let peer_pk = handshake.peer_pk.clone();
     CONNECTED_PEERS.write().await.insert(peer_pk.clone());
-    let res = peer_loop(&stream, &stream,handshake, ch_terminate, ch_storage.unwrap()).await;
+    let res = peer_loop(&stream, &stream,handshake, ch_terminate, ch_msg.unwrap()).await;
     CONNECTED_PEERS.write().await.remove(&peer_pk);
 
     if let Err(err) = res {
@@ -117,7 +116,7 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     writer: W,
     handshake: HandshakeComplete,
     ch_terminate: ChSigRecv,
-    mut ch_storage: ChStoRecv
+    mut ch_msg: ChMsgRecv
 ) -> SolarResult<()> {
     let peer_ssb_id = handshake.peer_pk.to_ssb_id();
 
@@ -130,28 +129,32 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     let mut history_stream_handler = HistoryStreamHandler::default();
     let mut whoami_handler = WhoAmIHandler::new(&peer_ssb_id);
     let mut get_handler = GetHandler::default();
-    let mut blobs_handler = BlobsHandler::default();
+    let mut blobs_get_handler = BlobsGetHandler::default();
+    let mut blobs_wants_handler = BlobsWantsHandler::default();
 
     let mut handlers: Vec<&mut dyn RpcHandler<R, W>> = vec![
         &mut history_stream_handler,
         &mut whoami_handler,
         &mut get_handler,
-        &mut blobs_handler,
+        &mut blobs_get_handler,
+        &mut blobs_wants_handler,
     ];
 
+    let mut ch_broker = BROKER.lock().await.create_sender();
     let mut ch_terminate = ch_terminate.fuse();
     loop {
+
         let input = select! {
           value = ch_terminate =>  {
             break;
           },
-          msg = api.rpc().recv().fuse() => {
-            let (rpc_id, msg) = msg?;
-            RpcInput::Network(rpc_id,msg)
+          packet = api.rpc().recv().fuse() => {
+            let (rpc_id, packet) = packet?;
+            RpcInput::Network(rpc_id,packet)
           },
-          id = ch_storage.next().fuse() => {
-            if let Some(id) = id {
-                RpcInput::Storage(id)
+          msg = ch_msg.next().fuse() => {
+            if let Some(msg) = msg {
+                RpcInput::Message(msg)
             } else {
                 RpcInput::None
             }
@@ -160,9 +163,10 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
             RpcInput::Timer
           },
         };
+
         let mut handled = false;
         for handler in handlers.iter_mut() {
-            match handler.handle(&mut api, &input).await {
+            match handler.handle(&mut api, &input, &mut ch_broker).await {
                 Ok(has_been_handled) => {
                     if has_been_handled {
                         handled = true;

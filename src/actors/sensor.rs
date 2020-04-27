@@ -52,7 +52,7 @@ async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> S
     data.push_back(mem_available % 20);
 
     let png = create_graphics(data.as_slice())?;
-    let blob_id = BLOB_STORAGE.write().await.insert(&png)?;
+    let blob_id = BLOB_STORAGE.write().await.insert(&png).await?;
 
     let markdown = format!(
         "Sensor recording at {:?} ... current temperature is {:?}

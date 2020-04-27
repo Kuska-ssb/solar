@@ -1,4 +1,5 @@
-use async_std::{prelude::*, sync::Mutex, task, task::JoinHandle};
+use core::any::Any;
+use async_std::{prelude::*, sync::{Mutex,Arc}, task, task::JoinHandle};
 use futures::{channel::mpsc, channel::oneshot, select, FutureExt, SinkExt};
 
 use once_cell::sync::Lazy;
@@ -6,21 +7,31 @@ use once_cell::sync::Lazy;
 use std::collections::hash_map::HashMap;
 
 use crate::error::SolarResult;
-use crate::storage::kv::{ChStoRecv, ChStoSend, StorageEvent};
 
 #[derive(Debug)]
 pub struct Void {}
 
+pub type BrokerMessage = Arc<dyn Any + Send + Sync>; 
+
 pub type ChBrokerSend = mpsc::UnboundedSender<BrokerEvent>;
 pub type ChSigSend = oneshot::Sender<Void>;
 pub type ChSigRecv = oneshot::Receiver<Void>;
+pub type ChMsgSend = mpsc::UnboundedSender<BrokerMessage>;
+pub type ChMsgRecv = mpsc::UnboundedReceiver<BrokerMessage>;
 
 #[derive(Debug)]
 pub enum BrokerEvent {
     Connect(BrokerEndpoint),
     Disconnect { actor_id: usize },
-    Storage(StorageEvent),
+    Message(BrokerMessage),
     Terminate,
+}
+
+impl BrokerEvent {
+    pub fn new<A>(any : A) -> Self
+    where A : Any + Send + Sync {
+        BrokerEvent::Message(Arc::new(any))
+    } 
 }
 
 #[derive(Debug)]
@@ -28,7 +39,8 @@ pub struct BrokerEndpoint {
     pub actor_id: usize,
     pub ch_terminate: ChSigSend,
     pub ch_terminated: ChSigRecv,
-    pub ch_storage: Option<ChStoSend>,
+
+    pub ch_msg: Option<ChMsgSend>,
 }
 
 #[derive(Debug)]
@@ -39,7 +51,7 @@ pub struct ActorEndpoint {
     pub ch_terminate: ChSigRecv,
     pub ch_terminated: ChSigSend,
 
-    pub ch_storage: Option<ChStoRecv>,
+    pub ch_msg: Option<ChMsgRecv>,
 }
 
 #[derive(Debug)]
@@ -67,7 +79,7 @@ impl Broker {
     pub async fn register(
         &mut self,
         name: &str,
-        storage_notify: bool,
+        msg_notify: bool
     ) -> SolarResult<ActorEndpoint> {
         self.last_actor_id += 1;
 
@@ -76,8 +88,8 @@ impl Broker {
         let (terminate_sender, terminate_receiver) = oneshot::channel::<Void>();
         let (terminated_sender, terminated_receiver) = oneshot::channel::<Void>();
 
-        let (sto_sender, sto_receiver) = if storage_notify {
-            let (s, r) = mpsc::unbounded::<StorageEvent>();
+        let (msg_sender, msg_receiver) = if msg_notify {
+            let (s, r) = mpsc::unbounded::<BrokerMessage>();
             (Some(s), Some(r))
         } else {
             (None, None)
@@ -87,14 +99,14 @@ impl Broker {
             actor_id: self.last_actor_id,
             ch_terminate: terminate_sender,
             ch_terminated: terminated_receiver,
-            ch_storage: sto_sender,
+            ch_msg: msg_sender,
         };
         let actor_endpoint = ActorEndpoint {
             actor_id: self.last_actor_id,
             ch_broker: self.sender.clone(),
             ch_terminate: terminate_receiver,
             ch_terminated: terminated_sender,
-            ch_storage: sto_receiver,
+            ch_msg: msg_receiver,
         };
 
         self.sender
@@ -141,15 +153,17 @@ impl Broker {
                     trace!(target:"solar-actor","Unregistering actor {}", actor_id);
                     actors.remove(&actor_id);
                 }
-                BrokerEvent::Storage(event) => {
+                BrokerEvent::Message(msg) => {
                     for actor in actors.values_mut() {
-                        if let Some(ch) = &mut actor.ch_storage {
-                            let _ = ch.send(event.clone()).await;
+                        if let Some(ch) = &mut actor.ch_msg {
+                            let _ = ch.send(msg.clone()).await;
                         }
                     }
                 }
             }
         }
+
+        trace!(target:"solar-actor","***Loop finished**");
 
         // send a termination signal
         let (terms, termds): (Vec<_>, Vec<_>) = actors
@@ -172,6 +186,9 @@ impl Broker {
             trace!(target:"solar-actor","Waiting termd signal from {}", actor_id);
             let _ = termd.await;
         }
+
+        trace!(target:"solar-actor","***All actors finished**");
+
         drop(actors);
     }
 }

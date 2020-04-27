@@ -19,6 +19,32 @@ use async_std::prelude::*;
 
 use async_std::sync::{Arc, RwLock};
 use once_cell::sync::{Lazy, OnceCell};
+use structopt::StructOpt;
+use std::path::PathBuf;
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "🌞 Solar", about = "Sunbathing scuttlecrabs", version=env!("SOLAR_VERSION"))]
+struct Opt {
+    /// Where data is stored, ~/.local/share/local by default
+    #[structopt(short, long, parse(from_os_str))]
+    data: Option<PathBuf>,
+
+    /// Connect to peers publickey@host:port,publickey@host:port,...
+    #[structopt(short, long)]
+    connect: Option<String>,
+
+    /// List of friends, "connect" magical word means that --connect peers are friends
+    #[structopt(short,long)]
+    friends: Option<String>,
+
+    /// Port to bind, 8008 by default
+    #[structopt(short,long)]
+    port: Option<u16>,
+    
+    /// Run lan discovery
+    #[structopt(short, long)]
+    lan: Option<bool>,
+}
 
 mod actors;
 mod broker;
@@ -31,8 +57,8 @@ use config::Config;
 use error::SolarResult;
 use storage::blob::BlobStorage;
 use storage::kv::KvStorage;
+use kuska_ssb::crypto::{ToSsbId,ToSodiumObject};
 
-const LISTEN: &str = "0.0.0.0:8008";
 const RPC_PORT: u16 = 8008;
 
 pub static KV_STORAGE: Lazy<Arc<RwLock<KvStorage>>> =
@@ -41,12 +67,19 @@ pub static BLOB_STORAGE: Lazy<Arc<RwLock<BlobStorage>>> =
     Lazy::new(|| Arc::new(RwLock::new(BlobStorage::default())));
 pub static CONFIG: OnceCell<Config> = OnceCell::new();
 
+
 #[async_std::main]
 async fn main() -> SolarResult<()> {
+
+    let opt = Opt::from_args();
+
+    let base_path = opt.data.unwrap_or(xdg::BaseDirectories::new()?.create_data_directory("solar")?);
+    let rpc_port = opt.port.unwrap_or(RPC_PORT);
+    let lan_discovery = opt.lan.unwrap_or(false);
+    let listen = format!("0.0.0.0:{}",rpc_port);
+
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
-
-    let base_path = xdg::BaseDirectories::new()?.create_data_directory("solar")?;
 
     println!("Base configuration is {:?}", base_path);
 
@@ -60,7 +93,7 @@ async fn main() -> SolarResult<()> {
     std::fs::create_dir_all(&feeds_folder)?;
     std::fs::create_dir_all(&blobs_folder)?;
 
-    let config = if !key_file.is_file() {
+    let mut config = if !key_file.is_file() {
         println!("Private key not found, generated new one in {:?}", key_file);
         let config = Config::create();
         let mut file = File::create(key_file).await?;
@@ -73,12 +106,39 @@ async fn main() -> SolarResult<()> {
         Config::from_toml(&raw)?
     };
 
+    let mut connects = Vec::new();
+    if let Some(connect) = opt.connect {
+        for peer in connect.split(',') {
+            let invalid_peer_msg = || format!("invalid peer {}",peer);
+            let parts = peer.split(|c| c=='@' || c==':').collect::<Vec<&str>>();
+            if parts.len() != 3 {
+                panic!(invalid_peer_msg());
+            }
+            let peer_pk = parts[0].to_ed25519_pk_no_suffix().expect(&invalid_peer_msg());
+            let server = parts[1].to_string();
+            let port = parts[2].parse::<u32>().expect(&invalid_peer_msg());
+            connects.push((server,port,peer_pk));
+        }
+    }
+
+    if let Some(friends) = opt.friends {
+        for friend in friends.split(",") {
+            if friend == "connect" {
+                for conn in &connects {
+                    config.friends.push(format!("@{}",conn.2.to_ssb_id()));
+                }                
+            } else {
+                config.friends.push(friend.to_string())
+            }
+        }
+    }
+
     let owned_id = config.owned_identity()?;
     let _err = CONFIG.set(config);
 
     println!(
         "Server started on {}:{}",
-        LISTEN,
+        listen,
         base64::encode(&owned_id.pk[..])
     );
 
@@ -87,12 +147,23 @@ async fn main() -> SolarResult<()> {
         .await
         .open(&feeds_folder, BROKER.lock().await.create_sender())?;
 
-    BLOB_STORAGE.write().await.open(blobs_folder);
+    BLOB_STORAGE.write().await.open(blobs_folder, BROKER.lock().await.create_sender());
 
     Broker::spawn(actors::ctrlc::actor());
-    Broker::spawn(actors::lan_discovery::actor(owned_id.clone(),RPC_PORT));
+    
+    if lan_discovery {
+        Broker::spawn(actors::lan_discovery::actor(owned_id.clone(),RPC_PORT));
+    }
+
     Broker::spawn(actors::sensor::actor(owned_id.clone()));
-    Broker::spawn(actors::tcp_server::actor(owned_id, LISTEN));
+    Broker::spawn(actors::tcp_server::actor(owned_id.clone(), listen));
+
+    for (server,port,peer_pk) in connects {
+        Broker::spawn(actors::peer::actor(
+            owned_id.clone(),
+            actors::peer::Connect::TcpServer{server,port,peer_pk}
+        ));
+    }
 
     let msgloop = BROKER.lock().await.take_msgloop();
     msgloop.await;

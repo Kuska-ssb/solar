@@ -4,18 +4,26 @@ use std::fs::File;
 use std::io::Result;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use crate::broker::{BrokerEvent,ChBrokerSend};
+
+use futures::SinkExt;
+
+pub enum StoBlobEvent {
+    Added(String)    
+}
 
 pub struct BlobStorage {
     path: Option<PathBuf>,
+    ch_broker: Option<ChBrokerSend>,
 }
 
 impl Default for BlobStorage {
     fn default() -> Self {
-        Self { path: None }
+        Self { path: None , ch_broker : None }
     }
 }
 
-trait ToBlobHashId {
+pub trait ToBlobHashId {
     fn blob_hash_id(&self) -> String;
 }
 
@@ -28,8 +36,9 @@ impl ToBlobHashId for &[u8] {
 }
 
 impl BlobStorage {
-    pub fn open(&mut self, path: PathBuf) {
+    pub fn open(&mut self, path: PathBuf, ch_broker: ChBrokerSend) {
         self.path = Some(path);
+        self.ch_broker = Some(ch_broker);
     }
     fn path_of(&self, id: &str) -> PathBuf {
         let id = id.replace("&", "").replace("/", "_");
@@ -44,9 +53,19 @@ impl BlobStorage {
             Ok(None)
         }
     }
-    pub fn insert<D: AsRef<[u8]>>(&self, content: D) -> Result<String> {
+    pub async fn insert<D: AsRef<[u8]>>(&self, content: D) -> Result<String> {
         let id = content.as_ref().blob_hash_id();
         File::create(self.path_of(&id))?.write_all(content.as_ref())?;
+
+        let broker_msg = BrokerEvent::new(StoBlobEvent::Added(id.clone()));
+
+        self.ch_broker
+            .as_ref()
+            .unwrap()
+            .send(broker_msg)
+            .await
+            .unwrap();
+
         Ok(id)
     }
     pub fn get(&self, id: &str) -> Result<Vec<u8>> {
