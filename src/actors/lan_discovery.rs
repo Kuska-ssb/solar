@@ -1,3 +1,5 @@
+#![allow(clippy::single_match)]
+
 use get_if_addrs::{get_if_addrs, IfAddr};
 
 use std::string::ToString;

@@ -23,13 +23,13 @@ use structopt::StructOpt;
 use std::path::PathBuf;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "🌞 Solar", about = "Sunbathing scuttlecrabs", version=env!("SOLAR_VERSION"))]
+#[structopt(name = "🌞 Solar", about = "Sunbathing scuttlecrabs in kuskaland", version=env!("SOLAR_VERSION"))]
 struct Opt {
     /// Where data is stored, ~/.local/share/local by default
     #[structopt(short, long, parse(from_os_str))]
     data: Option<PathBuf>,
 
-    /// Connect to peers publickey@host:port,publickey@host:port,...
+    /// Connect to peers host:port:publickey,host:port:publickey,...
     #[structopt(short, long)]
     connect: Option<String>,
 
@@ -44,6 +44,10 @@ struct Opt {
     /// Run lan discovery
     #[structopt(short, long)]
     lan: Option<bool>,
+
+    /// Run sensor
+    #[structopt(short, long)]
+    sensor: Option<bool>,
 }
 
 mod actors;
@@ -77,6 +81,7 @@ async fn main() -> SolarResult<()> {
     let rpc_port = opt.port.unwrap_or(RPC_PORT);
     let lan_discovery = opt.lan.unwrap_or(false);
     let listen = format!("0.0.0.0:{}",rpc_port);
+    let sensor = opt.sensor.unwrap_or(false);
 
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
@@ -110,19 +115,21 @@ async fn main() -> SolarResult<()> {
     if let Some(connect) = opt.connect {
         for peer in connect.split(',') {
             let invalid_peer_msg = || format!("invalid peer {}",peer);
-            let parts = peer.split(|c| c=='@' || c==':').collect::<Vec<&str>>();
+            let parts = peer.split(':').collect::<Vec<&str>>();
             if parts.len() != 3 {
                 panic!(invalid_peer_msg());
             }
-            let peer_pk = parts[0].to_ed25519_pk_no_suffix().expect(&invalid_peer_msg());
-            let server = parts[1].to_string();
-            let port = parts[2].parse::<u32>().expect(&invalid_peer_msg());
+            let server = parts[0].to_string();
+            let port = parts[1].parse::<u32>()
+                .unwrap_or_else( |_| panic!(invalid_peer_msg()));
+            let peer_pk = parts[2].to_ed25519_pk_no_suffix()
+                .unwrap_or_else(|_| panic!(invalid_peer_msg()));
             connects.push((server,port,peer_pk));
         }
     }
 
     if let Some(friends) = opt.friends {
-        for friend in friends.split(",") {
+        for friend in friends.split(',') {
             if friend == "connect" {
                 for conn in &connects {
                     config.friends.push(format!("@{}",conn.2.to_ssb_id()));
@@ -132,7 +139,7 @@ async fn main() -> SolarResult<()> {
             }
         }
     }
-
+    debug!(target:"solar", "friends are {:?}",config.friends);
     let owned_id = config.owned_identity()?;
     let _err = CONFIG.set(config);
 
@@ -151,12 +158,15 @@ async fn main() -> SolarResult<()> {
 
     Broker::spawn(actors::ctrlc::actor());
     
+
+    if sensor {
+        Broker::spawn(actors::sensor::actor(owned_id.clone()));
+    }
+
+    Broker::spawn(actors::tcp_server::actor(owned_id.clone(), listen));
     if lan_discovery {
         Broker::spawn(actors::lan_discovery::actor(owned_id.clone(),RPC_PORT));
     }
-
-    Broker::spawn(actors::sensor::actor(owned_id.clone()));
-    Broker::spawn(actors::tcp_server::actor(owned_id.clone(), listen));
 
     for (server,port,peer_pk) in connects {
         Broker::spawn(actors::peer::actor(

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use async_std::io::{Read, Write};
+use async_std::io::Write;
 use async_trait::async_trait;
 
 use kuska_ssb::{
@@ -12,18 +12,16 @@ use super::{RpcHandler, RpcInput};
 use crate::error::SolarResult;
 use crate::broker::ChBrokerSend;
 
-pub struct WhoAmIHandler<'a, R, W>
+pub struct WhoAmIHandler<'a, W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     peer_ssb_id: &'a str,
-    phantom: PhantomData<(R, W)>,
+    phantom: PhantomData<W>,
 }
 
-impl<'a, R, W> WhoAmIHandler<'a, R, W>
+impl<'a, W> WhoAmIHandler<'a, W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     pub fn new(peer_ssb_id: &'a str) -> Self {
@@ -35,16 +33,15 @@ where
 }
 
 #[async_trait]
-impl<'a, R, W> RpcHandler<R, W> for WhoAmIHandler<'a, R, W>
+impl<'a, W> RpcHandler<W> for WhoAmIHandler<'a,W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "WhoAmIHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -57,12 +54,11 @@ where
     }
 }
 
-impl<'a, R, W> WhoAmIHandler<'a, R, W>
+impl<'a, W> WhoAmIHandler<'a, W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
-    async fn recv_whoami(&mut self, api: &mut ApiHelper<R, W>, req_no: i32) -> SolarResult<bool> {
+    async fn recv_whoami(&mut self, api: &mut ApiHelper<W>, req_no: i32) -> SolarResult<bool> {
         api.whoami_res_send(req_no, self.peer_ssb_id.to_string())
             .await?;
         Ok(true)

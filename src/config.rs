@@ -14,7 +14,7 @@ impl Config {
     pub fn create() -> Self {
         let OwnedIdentity { id, sk, .. } = OwnedIdentity::create();
         Config {
-            id: id.clone(),
+            id,
             secret: sk.to_ssb_id(),
             friends: Vec::new(),
         }

@@ -1,8 +1,7 @@
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
-use serde_cbor;
 
-use crate::broker::{BrokerEvent, ChBrokerSend};
+use crate::broker::{BrokerEvent, Destination, ChBrokerSend};
 use kuska_ssb::feed::{Feed, Message};
 
 const PREFIX_LASTFEED: u8 = 0u8;
@@ -34,6 +33,7 @@ struct FeedRef {
 
 #[derive(Debug)]
 pub enum Error {
+    InvalidSequence,
     Sled(sled::Error),
     Feed(kuska_ssb::feed::Error),
     Cbor(serde_cbor::Error),
@@ -81,7 +81,8 @@ impl KvStorage {
         self.ch_broker = Some(ch_broker);
         Ok(())
     }
-    pub fn get_feed_len(&self, user_id: &str) -> Result<Option<u64>> {
+
+    pub fn get_last_feed_no(&self, user_id: &str) -> Result<Option<u64>> {
         let db = self.db.as_ref().unwrap();
         let key = Self::key_lastfeed(user_id);
         let count = if let Some(value) = db.get(&key)?.map(|v| v) {
@@ -178,7 +179,12 @@ impl KvStorage {
     }
 
     pub async fn append_feed(&self, msg: Message) -> Result<u64> {
-        let seq_no = self.get_feed_len(msg.author())?.map_or(0, |no| no + 1);
+        let seq_no = self.get_last_feed_no(msg.author())?.map_or(0, |no| no ) + 1;
+        
+        if msg.sequence() != seq_no {
+            return Err(Error::InvalidSequence);
+        }
+
         let author = msg.author().to_owned();
         let db = self.db.as_ref().unwrap();
 
@@ -192,7 +198,9 @@ impl KvStorage {
         db.insert(Self::key_feed(&author, seq_no), feed.to_string().as_bytes())?;
         db.insert(Self::key_lastfeed(&author), &seq_no.to_be_bytes()[..])?;
 
-        let broker_msg = BrokerEvent::new(StoKvEvent::IdChanged(msg.author().clone()));
+        db.flush_async().await?;
+
+        let broker_msg = BrokerEvent::new(Destination::Broadcast,StoKvEvent::IdChanged(msg.author().clone()));
 
         self.ch_broker
             .as_ref()

@@ -1,5 +1,7 @@
-use async_std::io::{Read, Write};
-use std::collections::HashSet;
+#![allow(clippy::single_match)]
+
+use async_std::io::Write;
+use std::collections::{HashSet,HashMap};
 use std::marker::PhantomData;
 
 use async_trait::async_trait;
@@ -8,67 +10,83 @@ use kuska_ssb::{
     rpc,
 };
 
+use crate::storage::blob::ToBlobHashId;
 use crate::error::SolarResult;
 use crate::BLOB_STORAGE;
 use crate::broker::ChBrokerSend;
 use super::{RpcHandler, RpcInput};
 
-pub struct BlobsGetHandler<R, W>
-where
-    R: Read + Unpin + Send + Sync,
-    W: Write + Unpin + Send + Sync,
-{
-    blob_reqs: HashSet<i32>,
-    phantom: PhantomData<(R, W)>,
+pub enum RpcBlobsGetEvent {
+    Get(dto::BlobsGetIn)
 }
 
-impl<R, W> Default for BlobsGetHandler<R, W>
+pub struct BlobsGetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
+    W: Write + Unpin + Send + Sync,
+{
+    incoming_reqs: HashSet<i32>,
+    outcoming_reqs: HashMap<i32,String>,
+    phantom: PhantomData<W>,
+}
+
+impl<W> Default for BlobsGetHandler<W>
+where
     W: Write + Unpin + Send + Sync,
 {
     fn default() -> Self {
         Self {
-            blob_reqs: HashSet::new(),
+            incoming_reqs: HashSet::new(),
+            outcoming_reqs: HashMap::new(),
             phantom: PhantomData,
         }
     }
 }
 
 #[async_trait]
-impl<R, W> RpcHandler<R, W> for BlobsGetHandler<R, W>
+impl<W> RpcHandler<W> for BlobsGetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "BlobsGetHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
-                    Some(ApiMethod::BlobsGet) => self.recv_get(api, *req_no, req).await,
-                    _ => Ok(false),
+                    Some(ApiMethod::BlobsGet) => return self.recv_get(api, *req_no, req).await,
+                    _ =>  {}
                 }
             }
             RpcInput::Network(req_no, rpc::RecvMsg::CancelStreamRespose()) => {
-                self.recv_cancelstream(api, *req_no).await
+                return self.recv_cancelstream(api, *req_no).await;
             }
-            _ => Ok(false),
+            RpcInput::Network(req_no, rpc::RecvMsg::RpcResponse(_type, res)) => {
+                return self.recv_rpc_response(api, *req_no, &res).await;
+            }
+            RpcInput::Message(msg) => {
+                if let Some(get_event) = msg.downcast_ref::<RpcBlobsGetEvent>() {
+                    match get_event {
+                        RpcBlobsGetEvent::Get(req) => {
+                            return self.event_get(api, req).await
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
+        Ok(false)
     }
 }
 
-impl<R, W> BlobsGetHandler<R, W>
+impl<W> BlobsGetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     async fn recv_get(
         &mut self,
-        api: &mut ApiHelper<R, W>,
+        api: &mut ApiHelper<W>,
         req_no: i32,
         req: &rpc::Body,
     ) -> SolarResult<bool> {
@@ -97,19 +115,51 @@ where
             }
         }
         api.blobs_get_res_send(req_no, &data).await?;
-        self.blob_reqs.insert(req_no);
+        self.incoming_reqs.insert(req_no);
 
         info!("Sent blob {}", args.key);
 
         Ok(true)
     }
 
-
     async fn recv_cancelstream(
         &mut self,
-        _api: &mut ApiHelper<R, W>,
+        _api: &mut ApiHelper<W>,
         req_no: i32,
     ) -> SolarResult<bool> {
-        Ok(self.blob_reqs.remove(&req_no))
+        Ok(self.incoming_reqs.remove(&req_no))
     }
+
+    async fn recv_rpc_response(
+        &mut self,
+        _api: &mut ApiHelper<W>,
+        req_no: i32,
+        res: &[u8]
+    ) -> SolarResult<bool> {
+        if let Some(expected_blob_id) = self.outcoming_reqs.remove(&req_no) {
+            let received_blob_id = res.blob_hash_id(); 
+            if received_blob_id != expected_blob_id {
+                warn!("Recieved a blob with bad hash, recieved={} expected={}",
+                    received_blob_id,expected_blob_id);
+            } else {
+                info!("Recieved blob {}",received_blob_id);
+                BLOB_STORAGE.write().await.insert(res).await?;
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn event_get(
+        &mut self,
+        api: &mut ApiHelper<W>,
+        req: &dto::BlobsGetIn
+    ) -> SolarResult<bool> {
+        info!("Requesting blob {}",req.key);
+        let req_no = api.blobs_get_req_send(req).await?;
+        self.outcoming_reqs.insert(req_no,req.key.clone());
+        Ok(true)
+    }
+
 }

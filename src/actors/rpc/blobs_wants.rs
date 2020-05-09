@@ -1,14 +1,14 @@
-use async_std::io::{Read, Write};
-use std::collections::{HashSet,HashMap};
+#![allow(clippy::single_match)]
+
+use async_std::io::Write;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use crate::futures::SinkExt;
 use async_trait::async_trait;
 use kuska_ssb::{
     api::{dto,ApiHelper, ApiMethod},
-    rpc,
-    crypto::sha256,
-    crypto::ToSsbId,
+    rpc
 };
 
 use crate::error::SolarResult;
@@ -16,7 +16,7 @@ use crate::BLOB_STORAGE;
 use crate::broker::ChBrokerSend;
 use crate::storage::blob::{StoBlobEvent,ToBlobHashId};
 
-use crate::broker::BrokerEvent;
+use crate::broker::{Destination,BrokerEvent};
 use super::{RpcHandler, RpcInput};
 
 enum RpcBlobsWantsEvent {
@@ -80,21 +80,19 @@ enum Wants {
     actor_peer1 -> peer1: haves
 */
 
-pub struct BlobsWantsHandler<R, W>
+pub struct BlobsWantsHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     initialized: bool,
     peer_wants_req_no: Option<i32>,
     my_wants_req_no: Option<i32>,
     peer_wants : HashMap<String,Wants>,
-    phantom: PhantomData<(R, W)>,
+    phantom: PhantomData<W>,
 }
 
-impl<R, W> Default for BlobsWantsHandler<R, W>
+impl<W> Default for BlobsWantsHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     fn default() -> Self {
@@ -109,16 +107,15 @@ where
 }
 
 #[async_trait]
-impl<R, W> RpcHandler<R, W> for BlobsWantsHandler<R, W>
+impl<W> RpcHandler<W> for BlobsWantsHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "BlobsWantsHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput, ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -175,14 +172,13 @@ where
     }
 }
 
-impl<R, W> BlobsWantsHandler<R, W>
+impl<W> BlobsWantsHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     async fn recv_create_wants(
         &mut self,
-        _api: &mut ApiHelper<R, W>,
+        _api: &mut ApiHelper<W>,
         req_no: i32,
         _req: &rpc::Body,
     ) -> SolarResult<bool> {
@@ -197,8 +193,9 @@ where
 
     async fn event_wants_broadcast(
         &mut self,
-        api: &mut ApiHelper<R, W>,
-        broadcast: &Vec<(String,i64)>
+        api: &mut ApiHelper<W>,
+
+        broadcast: &[(String,i64)]
     ) -> SolarResult<bool> {
         let mut wants : HashMap<String,i64> = HashMap::new();
         for (blob_id,distance) in broadcast {
@@ -218,23 +215,25 @@ where
 
     async fn event_stoblob_added(
         &mut self,
-        api: &mut ApiHelper<R, W>,
+        api: &mut ApiHelper<W>,
         blob_id: &str,
     ) -> SolarResult<bool> {
-        let mut haves: HashMap<String, i64> = HashMap::new();
-        haves.insert(blob_id.to_string(),1);
-        api.rpc().send_response(
-            self.peer_wants_req_no.unwrap(),
-            rpc::RpcType::Source,
-            rpc::BodyType::JSON,
-            &serde_json::to_vec(&haves)?,
-        ).await?;
+        if self.peer_wants.contains_key(blob_id) {
+            let mut haves: HashMap<String, i64> = HashMap::new();
+            haves.insert(blob_id.to_string(),1);
+            api.rpc().send_response(
+                self.peer_wants_req_no.unwrap(),
+                rpc::RpcType::Source,
+                rpc::BodyType::JSON,
+                &serde_json::to_vec(&haves)?,
+            ).await?;    
+        }
         Ok(true)
     }
 
     async fn recv_wants(
         &mut self,
-        api: &mut ApiHelper<R, W>,
+        api: &mut ApiHelper<W>,
         _req_no: i32,
         _xtype: rpc::BodyType,
         data: &[u8],
@@ -270,7 +269,7 @@ where
             .await?;
 
         // broadcast other peers with the blobs I don't have
-        let broker_msg = BrokerEvent::new(RpcBlobsWantsEvent::BroadcastWants(broadcast));
+        let broker_msg = BrokerEvent::new(Destination::Broadcast,RpcBlobsWantsEvent::BroadcastWants(broadcast));
         ch_broker
             .send(broker_msg)
             .await
@@ -281,7 +280,7 @@ where
 
     async fn recv_haves(
         &mut self,
-        api: &mut ApiHelper<R, W>,
+        api: &mut ApiHelper<W>,
         _req_no: i32,
         _xtype: rpc::BodyType,
         data: &[u8],
@@ -303,7 +302,7 @@ where
 
     async fn recv_blobs_get(
         &mut self,
-        _api: &mut ApiHelper<R, W>,
+        _api: &mut ApiHelper<W>,
         req_no: i32,
         _xtype: rpc::BodyType,
         data: &[u8],
