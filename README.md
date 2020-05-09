@@ -12,5 +12,5 @@ Current status is:
   - [X] `whoami`
   - [X] `get`
   - [X] `createHistoryStream` 
-  - [X] `blobs createaWants` & `blobs get` 
+  - [X] `blobs createWants` & `blobs get` 
 - [X] patchwork and cryptoscope interoperability
