@@ -5,20 +5,15 @@ use serde_cbor;
 use crate::broker::{BrokerEvent, ChBrokerSend};
 use kuska_ssb::feed::{Feed, Message};
 
-use futures::channel::mpsc;
-
 const PREFIX_LASTFEED: u8 = 0u8;
 const PREFIX_FEED: u8 = 1u8;
 const PREFIX_MESSAGE: u8 = 2u8;
 const PREFIX_BLOB: u8 = 3u8;
 
 #[derive(Debug, Clone)]
-pub enum StorageEvent {
+pub enum StoKvEvent {
     IdChanged(String),
 }
-
-pub type ChStoRecv = mpsc::UnboundedReceiver<StorageEvent>;
-pub type ChStoSend = mpsc::UnboundedSender<StorageEvent>;
 
 pub struct KvStorage {
     db: Option<sled::Db>,
@@ -197,12 +192,12 @@ impl KvStorage {
         db.insert(Self::key_feed(&author, seq_no), feed.to_string().as_bytes())?;
         db.insert(Self::key_lastfeed(&author), &seq_no.to_be_bytes()[..])?;
 
+        let broker_msg = BrokerEvent::new(StoKvEvent::IdChanged(msg.author().clone()));
+
         self.ch_broker
             .as_ref()
             .unwrap()
-            .send(BrokerEvent::Storage(StorageEvent::IdChanged(
-                msg.author().clone(),
-            )))
+            .send(broker_msg)
             .await
             .unwrap();
         Ok(seq_no)
@@ -216,7 +211,7 @@ mod test {
     #[test]
     fn test_blobs() -> Result<()> {
         let mut kv = KvStorage::default();
-        let (sender, _) = mpsc::unbounded();
+        let (sender, _) = futures::channel::mpsc::unbounded();
         let path = tempdir::TempDir::new("solardb").unwrap();
         kv.open(path.path(), sender).unwrap();
         assert_eq!(true,kv.get_blob("1").unwrap().is_none());

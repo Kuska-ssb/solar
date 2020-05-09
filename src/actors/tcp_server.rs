@@ -26,7 +26,7 @@ pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> SolarR
           stream = incoming.next().fuse() => {
             if let Some(stream) = stream {
                 if let Ok(stream) = stream {
-                    Broker::spawn(super::peer::actor(server_id.clone(), super::peer::Connect::Recieved{stream}));
+                    Broker::spawn(super::peer::actor(server_id.clone(), super::peer::Connect::ClientStream{stream}));
                 }
             } else {
               break;
