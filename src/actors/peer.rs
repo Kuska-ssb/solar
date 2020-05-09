@@ -9,8 +9,10 @@ use async_std::{
     prelude::*,
     task,
 };
+use futures::stream::StreamExt;
 
-use futures::{select, FutureExt, SinkExt};
+use async_stream::stream;
+use futures::{FutureExt, SinkExt};
 
 use kuska_handshake::{
     HandshakeComplete,
@@ -25,7 +27,7 @@ use kuska_ssb::{
     discovery::ssb_net_id,
     api::ApiHelper,
     crypto::{ed25519,ToSsbId},
-    rpc::RpcStream,
+    rpc::{RpcStreamReader,RpcStreamWriter},
     keystore::OwnedIdentity,
 };
 
@@ -92,9 +94,9 @@ pub async fn actor_inner(
         ..
     } = BROKER.lock().await.register("peer", true).await?;
 
-    let peer_pk = handshake.peer_pk.clone();
-    CONNECTED_PEERS.write().await.insert(peer_pk.clone());
-    let res = peer_loop(&stream, &stream,handshake, ch_terminate, ch_msg.unwrap()).await;
+    let peer_pk = handshake.peer_pk;
+    CONNECTED_PEERS.write().await.insert(peer_pk);
+    let res = peer_loop(actor_id, &stream, &stream,handshake, ch_terminate, ch_msg.unwrap()).await;
     CONNECTED_PEERS.write().await.remove(&peer_pk);
 
     if let Err(err) = res {
@@ -112,6 +114,7 @@ pub async fn actor_inner(
 }
 
 async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync>(
+    actor_id : usize,
     reader: R,
     writer: W,
     handshake: HandshakeComplete,
@@ -123,16 +126,17 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     let (box_stream_read, box_stream_write) =
         BoxStream::from_handshake(reader, writer, handshake, 0x8000).split_read_write();
 
-    let rpc = RpcStream::new(box_stream_read, box_stream_write);
-    let mut api = ApiHelper::new(rpc);
+    let mut rpc_reader = RpcStreamReader::new(box_stream_read);
+    let rpc_writer = RpcStreamWriter::new(box_stream_write);
+    let mut api = ApiHelper::new(rpc_writer);
 
-    let mut history_stream_handler = HistoryStreamHandler::default();
+    let mut history_stream_handler = HistoryStreamHandler::new(actor_id);
     let mut whoami_handler = WhoAmIHandler::new(&peer_ssb_id);
     let mut get_handler = GetHandler::default();
     let mut blobs_get_handler = BlobsGetHandler::default();
     let mut blobs_wants_handler = BlobsWantsHandler::default();
 
-    let mut handlers: Vec<&mut dyn RpcHandler<R, W>> = vec![
+    let mut handlers: Vec<&mut dyn RpcHandler<W>> = vec![
         &mut history_stream_handler,
         &mut whoami_handler,
         &mut get_handler,
@@ -141,15 +145,22 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     ];
 
     let mut ch_broker = BROKER.lock().await.create_sender();
-    let mut ch_terminate = ch_terminate.fuse();
-    loop {
+    let mut ch_terminate_fuse = ch_terminate.fuse();
 
-        let input = select! {
-          value = ch_terminate =>  {
+    let rpc_recv_fuse = stream! {
+        while let Ok(v) = rpc_reader.recv().await {
+            yield v            
+        }
+    };
+    pin_mut!(rpc_recv_fuse);
+
+    loop {
+        let input = select_biased! {
+          value = ch_terminate_fuse =>  {
             break;
           },
-          packet = api.rpc().recv().fuse() => {
-            let (rpc_id, packet) = packet?;
+          packet = rpc_recv_fuse.select_next_some() => {
+            let (rpc_id, packet) = packet;
             RpcInput::Network(rpc_id,packet)
           },
           msg = ch_msg.next().fuse() => {

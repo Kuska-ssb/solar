@@ -1,4 +1,4 @@
-use async_std::io::{Read, Write};
+use async_std::io::Write;
 use std::marker::PhantomData;
 
 use async_trait::async_trait;
@@ -13,17 +13,15 @@ use crate::broker::ChBrokerSend;
 
 use super::{RpcHandler, RpcInput};
 
-pub struct GetHandler<R, W>
+pub struct GetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
-    phantom: PhantomData<(R, W)>,
+    phantom: PhantomData<W>,
 }
 
-impl<R, W> Default for GetHandler<R, W>
+impl<W> Default for GetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     fn default() -> Self {
@@ -34,16 +32,15 @@ where
 }
 
 #[async_trait]
-impl<R, W> RpcHandler<R, W> for GetHandler<R, W>
+impl<W> RpcHandler<W> for GetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "GetHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<R, W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -56,14 +53,13 @@ where
     }
 }
 
-impl<R, W> GetHandler<R, W>
+impl<W> GetHandler<W>
 where
-    R: Read + Unpin + Send + Sync,
     W: Write + Unpin + Send + Sync,
 {
     async fn recv_get(
         &mut self,
-        api: &mut ApiHelper<R, W>,
+        api: &mut ApiHelper<W>,
         req_no: i32,
         req: &rpc::Body,
     ) -> SolarResult<bool> {

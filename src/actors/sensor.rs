@@ -34,7 +34,7 @@ pub async fn actor(server_id: OwnedIdentity) -> SolarResult<()> {
 async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> SolarResult<()> {
     let feed_storage = KV_STORAGE.write().await;
 
-    let last_msg = if let Some(last_id) = feed_storage.get_feed_len(&server_id.id)? {
+    let last_msg = if let Some(last_id) = feed_storage.get_last_feed_no(&server_id.id)? {
         Some(
             feed_storage
                 .get_feed(&server_id.id, last_id)?

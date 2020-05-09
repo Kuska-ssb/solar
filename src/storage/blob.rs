@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Result;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use crate::broker::{BrokerEvent,ChBrokerSend};
+use crate::broker::{BrokerEvent, Destination, ChBrokerSend};
 
 use futures::SinkExt;
 
@@ -57,7 +57,7 @@ impl BlobStorage {
         let id = content.as_ref().blob_hash_id();
         File::create(self.path_of(&id))?.write_all(content.as_ref())?;
 
-        let broker_msg = BrokerEvent::new(StoBlobEvent::Added(id.clone()));
+        let broker_msg = BrokerEvent::new(Destination::Broadcast,StoBlobEvent::Added(id.clone()));
 
         self.ch_broker
             .as_ref()

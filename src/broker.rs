@@ -1,6 +1,6 @@
 use core::any::Any;
 use async_std::{prelude::*, sync::{Mutex,Arc}, task, task::JoinHandle};
-use futures::{channel::mpsc, channel::oneshot, select, FutureExt, SinkExt};
+use futures::{channel::mpsc, channel::oneshot, FutureExt, SinkExt};
 
 use once_cell::sync::Lazy;
 
@@ -19,18 +19,24 @@ pub type ChSigRecv = oneshot::Receiver<Void>;
 pub type ChMsgSend = mpsc::UnboundedSender<BrokerMessage>;
 pub type ChMsgRecv = mpsc::UnboundedReceiver<BrokerMessage>;
 
+#[derive(PartialEq,Debug)]
+pub enum Destination {
+    Actor(usize),
+    Broadcast,
+}
+
 #[derive(Debug)]
 pub enum BrokerEvent {
     Connect(BrokerEndpoint),
     Disconnect { actor_id: usize },
-    Message(BrokerMessage),
+    Message {to:Destination,msg:BrokerMessage},
     Terminate,
 }
 
 impl BrokerEvent {
-    pub fn new<A>(any : A) -> Self
+    pub fn new<A>(to:Destination,any : A) -> Self
     where A : Any + Send + Sync {
-        BrokerEvent::Message(Arc::new(any))
+        BrokerEvent::Message{to,msg:Arc::new(any)}
     } 
 }
 
@@ -134,7 +140,7 @@ impl Broker {
         let mut actors: HashMap<usize, BrokerEndpoint> = HashMap::new();
 
         loop {
-            let event = select! {
+            let event = select_biased! {
                 event = events.next().fuse() => match event {
                     None => break,
                     Some(event) => event,
@@ -153,10 +159,12 @@ impl Broker {
                     trace!(target:"solar-actor","Unregistering actor {}", actor_id);
                     actors.remove(&actor_id);
                 }
-                BrokerEvent::Message(msg) => {
+                BrokerEvent::Message{to,msg} => {
                     for actor in actors.values_mut() {
-                        if let Some(ch) = &mut actor.ch_msg {
-                            let _ = ch.send(msg.clone()).await;
+                        if to == Destination::Actor(actor.actor_id) || to == Destination::Broadcast {
+                            if let Some(ch) = &mut actor.ch_msg {
+                                let _ = ch.send(msg.clone()).await;
+                            }    
                         }
                     }
                 }
