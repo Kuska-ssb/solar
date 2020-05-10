@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-kuska-ssb = { git =  "https://github.com/Kuska-ssb/kuska-ssb", branch = "master" }
+kuska-ssb = { git =  "https://github.com/Kuska-ssb/ssb", branch = "master" }
 async-std = { version = "1.5.0", features=["unstable","attributes"] }
 futures = "0.3.4"
 serde = { version = "1.0.104", features = ["derive"] }

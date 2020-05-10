@@ -1014,7 +1014,7 @@ dependencies = [
 [[package]]
 name = "kuska-handshake"
 version = "0.1.0"
-source = "git+https://github.com/Kuska-ssb/kuska-handshake#d421021bee2b579912a7455eb4dc7892065ac27d"
+source = "git+https://github.com/Kuska-ssb/handshake#d421021bee2b579912a7455eb4dc7892065ac27d"
 dependencies = [
  "async-std",
  "futures",
@@ -1026,7 +1026,7 @@ dependencies = [
 [[package]]
 name = "kuska-ssb"
 version = "0.2.0"
-source = "git+https://github.com/Kuska-ssb/kuska-ssb#cebb24b821c6b6a935e34a2d47e47d41f4f8a7a9"
+source = "git+https://github.com/Kuska-ssb/ssb#97129c77caef09154a5acdd5e4597b4167bddd8f"
 dependencies = [
  "async-std",
  "async-stream",
