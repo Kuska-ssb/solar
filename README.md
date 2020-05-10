@@ -1,6 +1,6 @@
 # 🌞 Solar
 
-The idea behing solar is to build IoT devices that speaks [Secure Scuttlebut](https://scuttlebutt.nz/), using the [Kuska](https://github.com/Kuska-ssb) rust libraries and mainly based on [async_std](https://async.rs/)
+The idea behing solar is to enable community hardware devices to speaks [Secure Scuttlebut](https://scuttlebutt.nz/), using the [Kuska](https://github.com/Kuska-ssb) rust libraries and mainly based on [async_std](https://async.rs/)
 
 Current status is:
 
