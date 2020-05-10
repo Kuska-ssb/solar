@@ -6,5 +6,9 @@ fn main() {
     } else {
         "unknown".to_string()
     };
-    println!("cargo:rustc-env=SOLAR_VERSION={}-{}", env!("CARGO_PKG_VERSION"), &git_hash[..7]);
+    println!(
+        "cargo:rustc-env=SOLAR_VERSION={}-{}",
+        env!("CARGO_PKG_VERSION"),
+        &git_hash[..7]
+    );
 }

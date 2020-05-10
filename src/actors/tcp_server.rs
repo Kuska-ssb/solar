@@ -1,13 +1,11 @@
 use async_std::{
     net::{TcpListener, ToSocketAddrs},
-    prelude::*
+    prelude::*,
 };
 
-use futures::{FutureExt};
+use futures::FutureExt;
 
-use kuska_ssb::{
-    keystore::OwnedIdentity,
-};
+use kuska_ssb::keystore::OwnedIdentity;
 
 use crate::broker::*;
 use crate::error::SolarResult;

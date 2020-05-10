@@ -1014,10 +1014,10 @@ dependencies = [
 [[package]]
 name = "kuska-handshake"
 version = "0.1.0"
+source = "git+https://github.com/Kuska-ssb/kuska-handshake#d421021bee2b579912a7455eb4dc7892065ac27d"
 dependencies = [
  "async-std",
  "futures",
- "hex",
  "log",
  "sodiumoxide",
  "tokio",
@@ -1025,19 +1025,24 @@ dependencies = [
 
 [[package]]
 name = "kuska-ssb"
-version = "0.1.5"
+version = "0.2.0"
+source = "git+https://github.com/Kuska-ssb/kuska-ssb#cebb24b821c6b6a935e34a2d47e47d41f4f8a7a9"
 dependencies = [
  "async-std",
+ "async-stream",
  "base64 0.11.0",
  "crossbeam",
  "dirs 2.0.2",
  "env_logger",
  "futures",
+ "get_if_addrs",
  "hex",
  "kuska-handshake",
  "lazy_static",
  "log",
+ "once_cell",
  "rand 0.7.3",
+ "regex",
  "serde",
  "serde_json",
  "sodiumoxide",
@@ -1896,17 +1901,14 @@ dependencies = [
 
 [[package]]
 name = "solar"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-ctrlc",
  "async-std",
- "async-stream",
  "async-trait",
  "base64 0.11.0",
  "env_logger",
  "futures",
- "get_if_addrs",
- "kuska-handshake",
  "kuska-ssb",
  "log",
  "once_cell",

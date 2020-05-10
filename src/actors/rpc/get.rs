@@ -3,13 +3,13 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use kuska_ssb::{
-    api::{ApiHelper, ApiMethod},
+    api::{ApiCaller, ApiMethod},
     rpc,
 };
 
+use crate::broker::ChBrokerSend;
 use crate::error::SolarResult;
 use crate::KV_STORAGE;
-use crate::broker::ChBrokerSend;
 
 use super::{RpcHandler, RpcInput};
 
@@ -40,7 +40,12 @@ where
         "GetHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(
+        &mut self,
+        api: &mut ApiCaller<W>,
+        op: &RpcInput,
+        _ch_broker: &mut ChBrokerSend,
+    ) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -59,7 +64,7 @@ where
 {
     async fn recv_get(
         &mut self,
-        api: &mut ApiHelper<W>,
+        api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
     ) -> SolarResult<bool> {
@@ -68,7 +73,9 @@ where
         match msg {
             Ok(Some(msg)) => api.get_res_send(req_no, &msg).await?,
             Ok(None) => {
-                api.rpc().send_error(req_no, req.rpc_type, "not found").await?
+                api.rpc()
+                    .send_error(req_no, req.rpc_type, "not found")
+                    .await?
             }
             Err(err) => {
                 let msg = format!("{}", err);

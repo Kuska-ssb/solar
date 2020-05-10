@@ -1,23 +1,23 @@
 #![allow(clippy::single_match)]
 
 use async_std::io::Write;
-use std::collections::{HashSet,HashMap};
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use kuska_ssb::{
-    api::{dto, ApiHelper, ApiMethod},
+    api::{dto, ApiCaller, ApiMethod},
     rpc,
 };
 
-use crate::storage::blob::ToBlobHashId;
-use crate::error::SolarResult;
-use crate::BLOB_STORAGE;
-use crate::broker::ChBrokerSend;
 use super::{RpcHandler, RpcInput};
+use crate::broker::ChBrokerSend;
+use crate::error::SolarResult;
+use crate::storage::blob::ToBlobHashId;
+use crate::BLOB_STORAGE;
 
 pub enum RpcBlobsGetEvent {
-    Get(dto::BlobsGetIn)
+    Get(dto::BlobsGetIn),
 }
 
 pub struct BlobsGetHandler<W>
@@ -25,7 +25,7 @@ where
     W: Write + Unpin + Send + Sync,
 {
     incoming_reqs: HashSet<i32>,
-    outcoming_reqs: HashMap<i32,String>,
+    outcoming_reqs: HashMap<i32, String>,
     phantom: PhantomData<W>,
 }
 
@@ -51,12 +51,17 @@ where
         "BlobsGetHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, _ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(
+        &mut self,
+        api: &mut ApiCaller<W>,
+        op: &RpcInput,
+        _ch_broker: &mut ChBrokerSend,
+    ) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
                     Some(ApiMethod::BlobsGet) => return self.recv_get(api, *req_no, req).await,
-                    _ =>  {}
+                    _ => {}
                 }
             }
             RpcInput::Network(req_no, rpc::RecvMsg::CancelStreamRespose()) => {
@@ -68,9 +73,7 @@ where
             RpcInput::Message(msg) => {
                 if let Some(get_event) = msg.downcast_ref::<RpcBlobsGetEvent>() {
                     match get_event {
-                        RpcBlobsGetEvent::Get(req) => {
-                            return self.event_get(api, req).await
-                        }
+                        RpcBlobsGetEvent::Get(req) => return self.event_get(api, req).await,
                     }
                 }
             }
@@ -86,7 +89,7 @@ where
 {
     async fn recv_get(
         &mut self,
-        api: &mut ApiHelper<W>,
+        api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
     ) -> SolarResult<bool> {
@@ -124,7 +127,7 @@ where
 
     async fn recv_cancelstream(
         &mut self,
-        _api: &mut ApiHelper<W>,
+        _api: &mut ApiCaller<W>,
         req_no: i32,
     ) -> SolarResult<bool> {
         Ok(self.incoming_reqs.remove(&req_no))
@@ -132,17 +135,19 @@ where
 
     async fn recv_rpc_response(
         &mut self,
-        _api: &mut ApiHelper<W>,
+        _api: &mut ApiCaller<W>,
         req_no: i32,
-        res: &[u8]
+        res: &[u8],
     ) -> SolarResult<bool> {
         if let Some(expected_blob_id) = self.outcoming_reqs.remove(&req_no) {
-            let received_blob_id = res.blob_hash_id(); 
+            let received_blob_id = res.blob_hash_id();
             if received_blob_id != expected_blob_id {
-                warn!("Recieved a blob with bad hash, recieved={} expected={}",
-                    received_blob_id,expected_blob_id);
+                warn!(
+                    "Recieved a blob with bad hash, recieved={} expected={}",
+                    received_blob_id, expected_blob_id
+                );
             } else {
-                info!("Recieved blob {}",received_blob_id);
+                info!("Recieved blob {}", received_blob_id);
                 BLOB_STORAGE.write().await.insert(res).await?;
             }
             Ok(true)
@@ -153,13 +158,12 @@ where
 
     async fn event_get(
         &mut self,
-        api: &mut ApiHelper<W>,
-        req: &dto::BlobsGetIn
+        api: &mut ApiCaller<W>,
+        req: &dto::BlobsGetIn,
     ) -> SolarResult<bool> {
-        info!("Requesting blob {}",req.key);
+        info!("Requesting blob {}", req.key);
         let req_no = api.blobs_get_req_send(req).await?;
-        self.outcoming_reqs.insert(req_no,req.key.clone());
+        self.outcoming_reqs.insert(req_no, req.key.clone());
         Ok(true)
     }
-
 }
