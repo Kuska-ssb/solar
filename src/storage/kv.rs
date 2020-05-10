@@ -1,7 +1,7 @@
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
 
-use crate::broker::{BrokerEvent, Destination, ChBrokerSend};
+use crate::broker::{BrokerEvent, ChBrokerSend, Destination};
 use kuska_ssb::feed::{Feed, Message};
 
 const PREFIX_LASTFEED: u8 = 0u8;
@@ -138,30 +138,29 @@ impl KvStorage {
         let db = self.db.as_ref().unwrap();
         let raw = serde_cbor::to_vec(blob)?;
         db.insert(Self::key_blob(blob_hash), raw)?;
-
         Ok(())
     }
 
     pub fn get_pending_blobs(&self) -> Result<Vec<String>> {
         let mut list = Vec::new();
- 
+
         let db = self.db.as_ref().unwrap();
-        let scan_key : &[u8] = &[PREFIX_BLOB];
+        let scan_key: &[u8] = &[PREFIX_BLOB];
         for item in db.range(scan_key..) {
-            let (k,v) = item?;
-            let blob : Blob = serde_cbor::from_slice(&v)?;
+            let (k, v) = item?;
+            let blob: Blob = serde_cbor::from_slice(&v)?;
             if !blob.retrieved {
                 list.push(String::from_utf8_lossy(&k[1..]).to_string());
             }
         }
         Ok(list)
     }
-    
+
     pub fn get_feed(&self, user_id: &str, feed_seq: u64) -> Result<Option<Feed>> {
         let db = self.db.as_ref().unwrap();
         if let Some(raw) = db.get(Self::key_feed(user_id, feed_seq))? {
             Ok(Some(Feed::from_slice(&raw)?))
-        } else { 
+        } else {
             Ok(None)
         }
     }
@@ -171,7 +170,10 @@ impl KvStorage {
 
         if let Some(raw) = db.get(Self::key_message(&msg_id))? {
             let feed_ref = serde_cbor::from_slice::<FeedRef>(&raw)?;
-            let msg = self.get_feed(&feed_ref.author, feed_ref.seq_no)?.unwrap().into_message()?;
+            let msg = self
+                .get_feed(&feed_ref.author, feed_ref.seq_no)?
+                .unwrap()
+                .into_message()?;
             Ok(Some(msg))
         } else {
             Ok(None)
@@ -179,8 +181,8 @@ impl KvStorage {
     }
 
     pub async fn append_feed(&self, msg: Message) -> Result<u64> {
-        let seq_no = self.get_last_feed_no(msg.author())?.map_or(0, |no| no ) + 1;
-        
+        let seq_no = self.get_last_feed_no(msg.author())?.map_or(0, |no| no) + 1;
+
         if msg.sequence() != seq_no {
             return Err(Error::InvalidSequence);
         }
@@ -200,7 +202,10 @@ impl KvStorage {
 
         db.flush_async().await?;
 
-        let broker_msg = BrokerEvent::new(Destination::Broadcast,StoKvEvent::IdChanged(msg.author().clone()));
+        let broker_msg = BrokerEvent::new(
+            Destination::Broadcast,
+            StoKvEvent::IdChanged(msg.author().clone()),
+        );
 
         self.ch_broker
             .as_ref()
@@ -222,28 +227,43 @@ mod test {
         let (sender, _) = futures::channel::mpsc::unbounded();
         let path = tempdir::TempDir::new("solardb").unwrap();
         kv.open(path.path(), sender).unwrap();
-        assert_eq!(true,kv.get_blob("1").unwrap().is_none());
-        kv.set_blob("b1", &Blob {
-            retrieved : true,
-            users : ["u1".to_string()].to_vec(),
-        }).unwrap();
-        kv.set_blob("b2", &Blob {
-            retrieved : false,
-            users : ["u2".to_string()].to_vec(),
-        }).unwrap();
+        assert_eq!(true, kv.get_blob("1").unwrap().is_none());
+        kv.set_blob(
+            "b1",
+            &Blob {
+                retrieved: true,
+                users: ["u1".to_string()].to_vec(),
+            },
+        )
+        .unwrap();
+        kv.set_blob(
+            "b2",
+            &Blob {
+                retrieved: false,
+                users: ["u2".to_string()].to_vec(),
+            },
+        )
+        .unwrap();
         let blob = kv.get_blob("b1").unwrap().unwrap();
-        assert_eq!(blob.retrieved,true);
-        assert_eq!(blob.users,["u1".to_string()].to_vec());
-        assert_eq!(kv.get_pending_blobs().unwrap(),["b2".to_string()].to_vec());
-              
-        kv.set_blob("b1", &Blob {
-            retrieved : false,
-            users : ["u7".to_string()].to_vec(),
-        }).unwrap();
+        assert_eq!(blob.retrieved, true);
+        assert_eq!(blob.users, ["u1".to_string()].to_vec());
+        assert_eq!(kv.get_pending_blobs().unwrap(), ["b2".to_string()].to_vec());
+
+        kv.set_blob(
+            "b1",
+            &Blob {
+                retrieved: false,
+                users: ["u7".to_string()].to_vec(),
+            },
+        )
+        .unwrap();
         let blob = kv.get_blob("b1").unwrap().unwrap();
-        assert_eq!(blob.retrieved,false);
-        assert_eq!(blob.users,["u7".to_string()].to_vec());
-        assert_eq!(kv.get_pending_blobs().unwrap(),["b1".to_string(),"b2".to_string()].to_vec());
+        assert_eq!(blob.retrieved, false);
+        assert_eq!(blob.users, ["u7".to_string()].to_vec());
+        assert_eq!(
+            kv.get_pending_blobs().unwrap(),
+            ["b1".to_string(), "b2".to_string()].to_vec()
+        );
 
         Ok(())
     }

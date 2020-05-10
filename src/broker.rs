@@ -1,5 +1,10 @@
+use async_std::{
+    prelude::*,
+    sync::{Arc, Mutex},
+    task,
+    task::JoinHandle,
+};
 use core::any::Any;
-use async_std::{prelude::*, sync::{Mutex,Arc}, task, task::JoinHandle};
 use futures::{channel::mpsc, channel::oneshot, FutureExt, SinkExt};
 
 use once_cell::sync::Lazy;
@@ -11,7 +16,7 @@ use crate::error::SolarResult;
 #[derive(Debug)]
 pub struct Void {}
 
-pub type BrokerMessage = Arc<dyn Any + Send + Sync>; 
+pub type BrokerMessage = Arc<dyn Any + Send + Sync>;
 
 pub type ChBrokerSend = mpsc::UnboundedSender<BrokerEvent>;
 pub type ChSigSend = oneshot::Sender<Void>;
@@ -19,7 +24,7 @@ pub type ChSigRecv = oneshot::Receiver<Void>;
 pub type ChMsgSend = mpsc::UnboundedSender<BrokerMessage>;
 pub type ChMsgRecv = mpsc::UnboundedReceiver<BrokerMessage>;
 
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Destination {
     Actor(usize),
     Broadcast,
@@ -29,15 +34,20 @@ pub enum Destination {
 pub enum BrokerEvent {
     Connect(BrokerEndpoint),
     Disconnect { actor_id: usize },
-    Message {to:Destination,msg:BrokerMessage},
+    Message { to: Destination, msg: BrokerMessage },
     Terminate,
 }
 
 impl BrokerEvent {
-    pub fn new<A>(to:Destination,any : A) -> Self
-    where A : Any + Send + Sync {
-        BrokerEvent::Message{to,msg:Arc::new(any)}
-    } 
+    pub fn new<A>(to: Destination, any: A) -> Self
+    where
+        A: Any + Send + Sync,
+    {
+        BrokerEvent::Message {
+            to,
+            msg: Arc::new(any),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -82,11 +92,7 @@ impl Broker {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(
-        &mut self,
-        name: &str,
-        msg_notify: bool
-    ) -> SolarResult<ActorEndpoint> {
+    pub async fn register(&mut self, name: &str, msg_notify: bool) -> SolarResult<ActorEndpoint> {
         self.last_actor_id += 1;
 
         trace!(target:"solar-actor","registering actor {}={}", self.last_actor_id, name);
@@ -159,12 +165,13 @@ impl Broker {
                     trace!(target:"solar-actor","Unregistering actor {}", actor_id);
                     actors.remove(&actor_id);
                 }
-                BrokerEvent::Message{to,msg} => {
+                BrokerEvent::Message { to, msg } => {
                     for actor in actors.values_mut() {
-                        if to == Destination::Actor(actor.actor_id) || to == Destination::Broadcast {
+                        if to == Destination::Actor(actor.actor_id) || to == Destination::Broadcast
+                        {
                             if let Some(ch) = &mut actor.ch_msg {
                                 let _ = ch.send(msg.clone()).await;
-                            }    
+                            }
                         }
                     }
                 }

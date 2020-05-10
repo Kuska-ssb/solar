@@ -1,10 +1,10 @@
 [package]
 name = "solar"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["adria0 <adria@codecontext.io>"]
 edition = "2018"
 default-run = "solar"
-#build = "build.rs"
+build = "build.rs"
 
 [[bin]]
 name = "solar"
@@ -12,8 +12,7 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-kuska-handshake = { path = "../kuska-handshake", branch = "master" , features=["sync","async_std"] }
-kuska-ssb = { path = "../kuska-ssb" }
+kuska-ssb = { git =  "https://github.com/Kuska-ssb/kuska-ssb", branch = "master" }
 async-std = { version = "1.5.0", features=["unstable","attributes"] }
 futures = "0.3.4"
 serde = { version = "1.0.104", features = ["derive"] }
@@ -28,7 +27,6 @@ snap = "1.0.0"
 rand = "0.7.3"
 sled = "0.31.0"
 xdg = "2.2.0"
-get_if_addrs = "0.5.3"
 base64 = "0.11.0"
 once_cell = "1.3.1"
 async-trait = "0.1.29"
@@ -39,4 +37,3 @@ slice-deque = "0.3.0"
 toml = "0.5.6"
 regex = "1.3.7"
 structopt = "0.3.14"
-async-stream = "0.2.1"

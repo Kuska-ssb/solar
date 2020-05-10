@@ -2,28 +2,29 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::string::ToString;
 
+use crate::futures::SinkExt;
 use async_std::io::Write;
 use async_trait::async_trait;
 use regex::Regex;
-use crate::futures::SinkExt;
 
 use kuska_ssb::{
-    api::{dto, ApiHelper, ApiMethod},
-    feed::{Feed,Message},
+    api::{dto, ApiCaller, ApiMethod},
+    feed::{Feed, Message},
     rpc,
 };
 
 use once_cell::sync::Lazy;
 
-use crate::broker::{BrokerEvent,Destination};
-use crate::error::SolarResult;
-use crate::KV_STORAGE;
-use crate::CONFIG;    
 use super::{RpcHandler, RpcInput};
-use crate::storage::kv::StoKvEvent;
 use crate::broker::ChBrokerSend;
+use crate::broker::{BrokerEvent, Destination};
+use crate::error::SolarResult;
+use crate::storage::kv::StoKvEvent;
+use crate::CONFIG;
+use crate::{BLOB_STORAGE, KV_STORAGE};
 
-pub static BLOB_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(&[0-9A-Za-z/+=]*.sha256)").unwrap());
+pub static BLOB_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(&[0-9A-Za-z/+=]*.sha256)").unwrap());
 
 #[derive(Debug)]
 struct HistoryStreamRequest {
@@ -37,9 +38,9 @@ where
     W: Write + Unpin + Send + Sync,
 {
     initialized: bool,
-    _actor_id : usize,
+    _actor_id: usize,
     reqs: HashMap<String, HistoryStreamRequest>,
-    friends: HashMap<i32,String>, 
+    friends: HashMap<i32, String>,
     phantom: PhantomData<W>,
 }
 
@@ -52,7 +53,12 @@ where
         "HistoryStreamHandler"
     }
 
-    async fn handle(&mut self, api: &mut ApiHelper<W>, op: &RpcInput, ch_broker: &mut ChBrokerSend) -> SolarResult<bool> {
+    async fn handle(
+        &mut self,
+        api: &mut ApiCaller<W>,
+        op: &RpcInput,
+        ch_broker: &mut ChBrokerSend,
+    ) -> SolarResult<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -79,11 +85,9 @@ where
                         }
                     }
                 }
-                Ok(false)                
+                Ok(false)
             }
-            RpcInput::Timer => {
-                self.on_timer(api).await
-            }
+            RpcInput::Timer => self.on_timer(api).await,
             _ => Ok(false),
         }
     }
@@ -93,30 +97,27 @@ impl<W> HistoryStreamHandler<W>
 where
     W: Write + Unpin + Send + Sync,
 {
-    pub fn new(actor_id : usize) -> Self {
+    pub fn new(actor_id: usize) -> Self {
         Self {
-            _actor_id : actor_id,
-            initialized : false,
+            _actor_id: actor_id,
+            initialized: false,
             friends: HashMap::new(),
             reqs: HashMap::new(),
             phantom: PhantomData,
         }
     }
 
-
-
-    async fn on_timer(&mut self,api: &mut ApiHelper<W>) -> SolarResult<bool> {
+    async fn on_timer(&mut self, api: &mut ApiCaller<W>) -> SolarResult<bool> {
         if !self.initialized {
             debug!(target: "solar", "initializing historystreamhandler");
             let args = dto::CreateHistoryStreamIn::new(CONFIG.get().unwrap().id.clone());
-            let _ = api.create_history_stream_req_send(&args).await?;            
+            let _ = api.create_history_stream_req_send(&args).await?;
             for friend in &CONFIG.get().unwrap().friends {
-                let mut args = dto::CreateHistoryStreamIn::new(friend.to_string())
-                .live(true);
+                let mut args = dto::CreateHistoryStreamIn::new(friend.to_string()).live(true);
                 if let Some(last_feed) = KV_STORAGE.read().await.get_last_feed_no(&friend)? {
                     args = args.after_seq(last_feed);
                 }
-                let id =  api.create_history_stream_req_send(&args).await?;
+                let id = api.create_history_stream_req_send(&args).await?;
                 self.friends.insert(id, friend.to_string());
                 debug!(target: "solar", "Requesting feeds from friend {} starting with {:?}" ,friend,args.seq);
             }
@@ -125,44 +126,54 @@ where
         Ok(false)
     }
 
-    fn extract_blob_refs(
-        &mut self,
-        msg: &Message,
-    ) -> Vec<String>{
+    fn extract_blob_refs(&mut self, msg: &Message) -> Vec<String> {
         let mut refs = Vec::new();
-        let msg : Result<dto::content::TypedMessage,_> = serde_json::from_value(msg.content().clone());
-        if let Ok(dto::content::TypedMessage::Post{text,..}) = msg {
+        let msg: Result<dto::content::TypedMessage, _> =
+            serde_json::from_value(msg.content().clone());
+        if let Ok(dto::content::TypedMessage::Post { text, .. }) = msg {
             for cap in BLOB_REGEX.captures_iter(&text) {
                 let key = cap.get(0).unwrap().as_str().to_owned();
                 refs.push(key);
-            }    
+            }
         }
         refs
     }
 
     async fn recv_rpc_response(
         &mut self,
-        _api: &mut ApiHelper<W>,
+        _api: &mut ApiCaller<W>,
         ch_broker: &mut ChBrokerSend,
         req_no: i32,
-        res: &[u8]
+        res: &[u8],
     ) -> SolarResult<bool> {
         if self.friends.contains_key(&req_no) {
             let msg = Feed::from_slice(res)?.into_message()?;
-            let last_feed = KV_STORAGE.read().await.get_last_feed_no(&msg.author().to_string())?.unwrap_or(0);
-            if msg.sequence() == last_feed + 1{                
+            let last_feed = KV_STORAGE
+                .read()
+                .await
+                .get_last_feed_no(&msg.author().to_string())?
+                .unwrap_or(0);
+            if msg.sequence() == last_feed + 1 {
                 KV_STORAGE.write().await.append_feed(msg.clone()).await?;
-                info!("Recieved {} msg no {}",msg.author(),msg.sequence());
+                info!("Recieved {} msg no {}", msg.author(), msg.sequence());
                 for key in self.extract_blob_refs(&msg) {
-                    let event = super::blobs_get::RpcBlobsGetEvent::Get(dto::BlobsGetIn{key,size:None, max:None});
-                    let broker_msg = BrokerEvent::new(Destination::Broadcast,event);
-                    ch_broker
-                        .send(broker_msg)
-                        .await
-                        .unwrap();
+                    if !BLOB_STORAGE.read().await.exists(&key) {
+                        let event = super::blobs_get::RpcBlobsGetEvent::Get(dto::BlobsGetIn {
+                            key,
+                            size: None,
+                            max: None,
+                        });
+                        let broker_msg = BrokerEvent::new(Destination::Broadcast, event);
+                        ch_broker.send(broker_msg).await.unwrap();
+                    }
                 }
             } else {
-                warn!("Recieved message out of order {} recv:{} db:{}",&msg.author().to_string(),msg.sequence(), last_feed);
+                warn!(
+                    "Recieved message out of order {} recv:{} db:{}",
+                    &msg.author().to_string(),
+                    msg.sequence(),
+                    last_feed
+                );
             }
             Ok(true)
         } else {
@@ -172,7 +183,7 @@ where
 
     async fn recv_createhistorystream(
         &mut self,
-        api: &mut ApiHelper<W>,
+        api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
     ) -> SolarResult<bool> {
@@ -196,7 +207,7 @@ where
 
     async fn recv_cancelstream(
         &mut self,
-        api: &mut ApiHelper<W>,
+        api: &mut ApiCaller<W>,
         req_no: i32,
     ) -> SolarResult<bool> {
         if let Some(key) = self.find_key_by_req_no(req_no) {
@@ -210,7 +221,7 @@ where
 
     async fn recv_error_response(
         &mut self,
-        _api: &mut ApiHelper<W>,
+        _api: &mut ApiCaller<W>,
         req_no: i32,
         error_msg: &str,
     ) -> SolarResult<bool> {
@@ -225,7 +236,7 @@ where
 
     async fn recv_storageevent_idchanged(
         &mut self,
-        api: &mut ApiHelper<W>,
+        api: &mut ApiCaller<W>,
         id: &str,
     ) -> SolarResult<bool> {
         if let Some(mut req) = self.reqs.remove(id) {
@@ -246,7 +257,7 @@ where
 
     async fn send_history(
         &mut self,
-        api: &mut ApiHelper<W>,
+        api: &mut ApiCaller<W>,
         req: &mut HistoryStreamRequest,
     ) -> SolarResult<()> {
         let req_id = if req.args.id.starts_with('@') {

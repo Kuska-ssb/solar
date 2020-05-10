@@ -1,7 +1,7 @@
 use std::{
-    result::Result,
     error::Error,
-    fmt::{self,Display,Formatter}
+    fmt::{self, Display, Formatter},
+    result::Result,
 };
 
 pub type SolarResult<T> = Result<T, Box<dyn Error + Sync + Send>>;
@@ -15,12 +15,4 @@ impl Display for SolarError {
     }
 }
 
-impl Error for SolarError {
-    
-}
-
-impl SolarError {
-    pub fn new(msg : &str) -> SolarError{
-        SolarError(msg.to_string())
-    }
-}
+impl Error for SolarError {}

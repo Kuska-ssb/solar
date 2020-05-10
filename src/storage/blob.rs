@@ -1,15 +1,15 @@
+use crate::broker::{BrokerEvent, ChBrokerSend, Destination};
 use sha2::Digest;
 use sha2::Sha256;
 use std::fs::File;
 use std::io::Result;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use crate::broker::{BrokerEvent, Destination, ChBrokerSend};
 
 use futures::SinkExt;
 
 pub enum StoBlobEvent {
-    Added(String)    
+    Added(String),
 }
 
 pub struct BlobStorage {
@@ -19,7 +19,10 @@ pub struct BlobStorage {
 
 impl Default for BlobStorage {
     fn default() -> Self {
-        Self { path: None , ch_broker : None }
+        Self {
+            path: None,
+            ch_broker: None,
+        }
     }
 }
 
@@ -57,7 +60,7 @@ impl BlobStorage {
         let id = content.as_ref().blob_hash_id();
         File::create(self.path_of(&id))?.write_all(content.as_ref())?;
 
-        let broker_msg = BrokerEvent::new(Destination::Broadcast,StoBlobEvent::Added(id.clone()));
+        let broker_msg = BrokerEvent::new(Destination::Broadcast, StoBlobEvent::Added(id.clone()));
 
         self.ch_broker
             .as_ref()
@@ -73,5 +76,8 @@ impl BlobStorage {
         let mut content = Vec::with_capacity(file.metadata()?.len() as usize);
         file.read_to_end(&mut content)?;
         Ok(content)
+    }
+    pub fn exists(&self, id: &str) -> bool {
+        self.path_of(id).exists()
     }
 }

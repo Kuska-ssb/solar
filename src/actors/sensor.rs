@@ -39,7 +39,7 @@ async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> S
             feed_storage
                 .get_feed(&server_id.id, last_id)?
                 .unwrap()
-                .into_message()?
+                .into_message()?,
         )
     } else {
         None
