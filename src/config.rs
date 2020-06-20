@@ -1,4 +1,4 @@
-use super::error::SolarResult;
+use anyhow::Result;
 use kuska_ssb::crypto::ToSodiumObject;
 use kuska_ssb::crypto::ToSsbId;
 use kuska_ssb::keystore::OwnedIdentity;
@@ -19,13 +19,13 @@ impl Config {
             friends: Vec::new(),
         }
     }
-    pub fn to_toml(&self) -> SolarResult<Vec<u8>> {
+    pub fn to_toml(&self) -> Result<Vec<u8>> {
         Ok(toml::to_vec(&self)?)
     }
-    pub fn from_toml(s: &[u8]) -> SolarResult<Self> {
+    pub fn from_toml(s: &[u8]) -> Result<Self> {
         Ok(toml::from_slice::<Config>(s)?)
     }
-    pub fn owned_identity(&self) -> SolarResult<OwnedIdentity> {
+    pub fn owned_identity(&self) -> Result<OwnedIdentity> {
         Ok(OwnedIdentity {
             id: self.id.clone(),
             pk: self.id[1..].to_ed25519_pk()?,

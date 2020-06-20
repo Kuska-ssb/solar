@@ -25,7 +25,7 @@ use kuska_ssb::{
 };
 
 use crate::broker::*;
-use crate::error::SolarResult;
+use anyhow::Result;
 
 use super::rpc::{
     BlobsGetHandler, BlobsWantsHandler, GetHandler, HistoryStreamHandler, RpcHandler, RpcInput,
@@ -46,14 +46,14 @@ pub enum Connect {
 pub static CONNECTED_PEERS: Lazy<Arc<RwLock<HashSet<ed25519::PublicKey>>>> =
     Lazy::new(|| Arc::new(RwLock::new(HashSet::new())));
 
-pub async fn actor(id: OwnedIdentity, connect: Connect) -> SolarResult<()> {
+pub async fn actor(id: OwnedIdentity, connect: Connect) -> Result<()> {
     if let Err(err) = actor_inner(id, connect).await {
         warn!("peer failed: {:?}", err);
     }
     Ok(())
 }
 
-pub async fn actor_inner(id: OwnedIdentity, connect: Connect) -> SolarResult<()> {
+pub async fn actor_inner(id: OwnedIdentity, connect: Connect) -> Result<()> {
     let OwnedIdentity { pk, sk, .. } = id;
     let (stream, handshake) = match connect {
         Connect::TcpServer {
@@ -124,7 +124,7 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
     handshake: HandshakeComplete,
     ch_terminate: ChSigRecv,
     mut ch_msg: ChMsgRecv,
-) -> SolarResult<()> {
+) -> Result<()> {
     let peer_ssb_id = handshake.peer_pk.to_ssb_id();
 
     let (box_stream_read, box_stream_write) =

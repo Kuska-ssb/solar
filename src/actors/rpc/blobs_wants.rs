@@ -12,9 +12,9 @@ use kuska_ssb::{
 };
 
 use crate::broker::ChBrokerSend;
-use crate::error::SolarResult;
 use crate::storage::blob::{StoBlobEvent, ToBlobHashId};
 use crate::BLOB_STORAGE;
+use anyhow::Result;
 
 use super::{RpcHandler, RpcInput};
 use crate::broker::{BrokerEvent, Destination};
@@ -120,7 +120,7 @@ where
         api: &mut ApiCaller<W>,
         op: &RpcInput,
         ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -191,7 +191,7 @@ where
         _api: &mut ApiCaller<W>,
         req_no: i32,
         _req: &rpc::Body,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         if self.peer_wants_req_no.is_none() {
             trace!(target: "ssb-blob", "recieved create wants");
             self.peer_wants_req_no = Some(req_no);
@@ -206,7 +206,7 @@ where
         api: &mut ApiCaller<W>,
 
         broadcast: &[(String, i64)],
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         let mut wants: HashMap<String, i64> = HashMap::new();
         for (blob_id, distance) in broadcast {
             if !self.peer_wants.contains_key(blob_id) {
@@ -224,11 +224,7 @@ where
         Ok(true)
     }
 
-    async fn event_stoblob_added(
-        &mut self,
-        api: &mut ApiCaller<W>,
-        blob_id: &str,
-    ) -> SolarResult<bool> {
+    async fn event_stoblob_added(&mut self, api: &mut ApiCaller<W>, blob_id: &str) -> Result<bool> {
         if self.peer_wants.contains_key(blob_id) {
             let mut haves: HashMap<String, i64> = HashMap::new();
             haves.insert(blob_id.to_string(), 1);
@@ -251,7 +247,7 @@ where
         _xtype: rpc::BodyType,
         data: &[u8],
         ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         // requested wants by self.my_wants_req_no
         // anwsering haves by self.peer_wants_req_no
 
@@ -297,7 +293,7 @@ where
         _xtype: rpc::BodyType,
         data: &[u8],
         _ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         let haves: HashMap<String, i64> = serde_json::from_slice(data)?;
         trace!(target: "ssb-blob", "haves:{:?}",haves);
 
@@ -320,7 +316,7 @@ where
         _xtype: rpc::BodyType,
         data: &[u8],
         _ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         let wants = self
             .peer_wants
             .iter_mut()

@@ -8,8 +8,8 @@ use kuska_ssb::{
 };
 
 use crate::broker::ChBrokerSend;
-use crate::error::SolarResult;
 use crate::KV_STORAGE;
+use anyhow::Result;
 
 use super::{RpcHandler, RpcInput};
 
@@ -45,7 +45,7 @@ where
         api: &mut ApiCaller<W>,
         op: &RpcInput,
         _ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -67,7 +67,7 @@ where
         api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         let args: Vec<String> = serde_json::from_value(req.args.clone())?;
         let msg = KV_STORAGE.read().await.get_message(&args[0]);
         match msg {

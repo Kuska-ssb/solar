@@ -10,10 +10,10 @@ use slice_deque::SliceDeque;
 use kuska_ssb::{api::dto::content::Post, feed::Message, keystore::OwnedIdentity};
 
 use crate::broker::*;
-use crate::error::SolarResult;
 use crate::{BLOB_STORAGE, KV_STORAGE};
+use anyhow::Result;
 
-pub async fn actor(server_id: OwnedIdentity) -> SolarResult<()> {
+pub async fn actor(server_id: OwnedIdentity) -> Result<()> {
     let broker = BROKER.lock().await.register("sensor", false).await?;
     let mut ch_terminate = broker.ch_terminate.fuse();
     let mut data: SliceDeque<u64> = SliceDeque::with_capacity(20);
@@ -31,7 +31,7 @@ pub async fn actor(server_id: OwnedIdentity) -> SolarResult<()> {
     Ok(())
 }
 
-async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> SolarResult<()> {
+async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> Result<()> {
     let feed_storage = KV_STORAGE.write().await;
 
     let last_msg = if let Some(last_id) = feed_storage.get_last_feed_no(&server_id.id)? {
@@ -70,7 +70,7 @@ async fn sensor_proc(server_id: &OwnedIdentity, data: &mut SliceDeque<u64>) -> S
     Ok(())
 }
 
-fn create_graphics(data: &[u64]) -> SolarResult<Vec<u8>> {
+fn create_graphics(data: &[u64]) -> Result<Vec<u8>> {
     let mut image_path = std::env::temp_dir();
     image_path.push("sonarsewarnnsor");
     image_path.set_extension("png");

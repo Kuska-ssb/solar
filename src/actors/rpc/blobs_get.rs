@@ -12,9 +12,9 @@ use kuska_ssb::{
 
 use super::{RpcHandler, RpcInput};
 use crate::broker::ChBrokerSend;
-use crate::error::SolarResult;
 use crate::storage::blob::ToBlobHashId;
 use crate::BLOB_STORAGE;
+use anyhow::Result;
 
 pub enum RpcBlobsGetEvent {
     Get(dto::BlobsGetIn),
@@ -56,7 +56,7 @@ where
         api: &mut ApiCaller<W>,
         op: &RpcInput,
         _ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -92,7 +92,7 @@ where
         api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         let mut args: Vec<dto::BlobsGetIn> = serde_json::from_value(req.args.clone())?;
         let args = args.pop().unwrap();
 
@@ -125,11 +125,7 @@ where
         Ok(true)
     }
 
-    async fn recv_cancelstream(
-        &mut self,
-        _api: &mut ApiCaller<W>,
-        req_no: i32,
-    ) -> SolarResult<bool> {
+    async fn recv_cancelstream(&mut self, _api: &mut ApiCaller<W>, req_no: i32) -> Result<bool> {
         Ok(self.incoming_reqs.remove(&req_no))
     }
 
@@ -138,7 +134,7 @@ where
         _api: &mut ApiCaller<W>,
         req_no: i32,
         res: &[u8],
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         if let Some(expected_blob_id) = self.outcoming_reqs.remove(&req_no) {
             let received_blob_id = res.blob_hash_id();
             if received_blob_id != expected_blob_id {
@@ -156,11 +152,7 @@ where
         }
     }
 
-    async fn event_get(
-        &mut self,
-        api: &mut ApiCaller<W>,
-        req: &dto::BlobsGetIn,
-    ) -> SolarResult<bool> {
+    async fn event_get(&mut self, api: &mut ApiCaller<W>, req: &dto::BlobsGetIn) -> Result<bool> {
         info!("Requesting blob {}", req.key);
         let req_no = api.blobs_get_req_send(req).await?;
         self.outcoming_reqs.insert(req_no, req.key.clone());

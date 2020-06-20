@@ -8,9 +8,9 @@ use futures::FutureExt;
 use kuska_ssb::keystore::OwnedIdentity;
 
 use crate::broker::*;
-use crate::error::SolarResult;
+use anyhow::Result;
 
-pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> SolarResult<()> {
+pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> Result<()> {
     let broker = BROKER.lock().await.register("sbot-listener", false).await?;
 
     let mut ch_terminate = broker.ch_terminate.fuse();

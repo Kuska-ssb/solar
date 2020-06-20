@@ -1,7 +1,7 @@
 use async_std::io::Write;
 
 use crate::broker::{BrokerMessage, ChBrokerSend};
-use crate::error::SolarResult;
+use anyhow::Result;
 use async_trait::async_trait;
 use kuska_ssb::{api::ApiCaller, rpc::RecvMsg};
 
@@ -24,5 +24,5 @@ where
         api: &mut ApiCaller<W>,
         op: &RpcInput,
         ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool>;
+    ) -> Result<bool>;
 }

@@ -18,10 +18,10 @@ use once_cell::sync::Lazy;
 use super::{RpcHandler, RpcInput};
 use crate::broker::ChBrokerSend;
 use crate::broker::{BrokerEvent, Destination};
-use crate::error::SolarResult;
 use crate::storage::kv::StoKvEvent;
 use crate::CONFIG;
 use crate::{BLOB_STORAGE, KV_STORAGE};
+use anyhow::Result;
 
 pub static BLOB_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(&[0-9A-Za-z/+=]*.sha256)").unwrap());
@@ -58,7 +58,7 @@ where
         api: &mut ApiCaller<W>,
         op: &RpcInput,
         ch_broker: &mut ChBrokerSend,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         match op {
             RpcInput::Network(req_no, rpc::RecvMsg::RpcRequest(req)) => {
                 match ApiMethod::from_rpc_body(req) {
@@ -107,7 +107,7 @@ where
         }
     }
 
-    async fn on_timer(&mut self, api: &mut ApiCaller<W>) -> SolarResult<bool> {
+    async fn on_timer(&mut self, api: &mut ApiCaller<W>) -> Result<bool> {
         if !self.initialized {
             debug!(target: "solar", "initializing historystreamhandler");
             let args = dto::CreateHistoryStreamIn::new(CONFIG.get().unwrap().id.clone());
@@ -145,7 +145,7 @@ where
         ch_broker: &mut ChBrokerSend,
         req_no: i32,
         res: &[u8],
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         if self.friends.contains_key(&req_no) {
             let msg = Feed::from_slice(res)?.into_message()?;
             let last_feed = KV_STORAGE
@@ -186,7 +186,7 @@ where
         api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         let mut args: Vec<dto::CreateHistoryStreamIn> = serde_json::from_value(req.args.clone())?;
 
         let args = args.pop().unwrap();
@@ -205,11 +205,7 @@ where
         Ok(true)
     }
 
-    async fn recv_cancelstream(
-        &mut self,
-        api: &mut ApiCaller<W>,
-        req_no: i32,
-    ) -> SolarResult<bool> {
+    async fn recv_cancelstream(&mut self, api: &mut ApiCaller<W>, req_no: i32) -> Result<bool> {
         if let Some(key) = self.find_key_by_req_no(req_no) {
             api.rpc().send_stream_eof(-req_no).await?;
             self.reqs.remove(&key);
@@ -224,7 +220,7 @@ where
         _api: &mut ApiCaller<W>,
         req_no: i32,
         error_msg: &str,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         if let Some(key) = self.find_key_by_req_no(req_no) {
             warn!("error {}", error_msg);
             self.reqs.remove(&key);
@@ -238,7 +234,7 @@ where
         &mut self,
         api: &mut ApiCaller<W>,
         id: &str,
-    ) -> SolarResult<bool> {
+    ) -> Result<bool> {
         if let Some(mut req) = self.reqs.remove(id) {
             self.send_history(api, &mut req).await?;
             self.reqs.insert(id.to_string(), req);
@@ -259,7 +255,7 @@ where
         &mut self,
         api: &mut ApiCaller<W>,
         req: &mut HistoryStreamRequest,
-    ) -> SolarResult<()> {
+    ) -> Result<()> {
         let req_id = if req.args.id.starts_with('@') {
             req.args.id.clone()
         } else {

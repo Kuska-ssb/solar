@@ -10,6 +10,7 @@ extern crate sha2;
 extern crate slice_deque;
 #[macro_use]
 extern crate serde;
+extern crate anyhow;
 extern crate toml;
 
 use async_std::fs::File;
@@ -52,12 +53,11 @@ struct Opt {
 mod actors;
 mod broker;
 mod config;
-mod error;
 mod storage;
 
+use anyhow::Result;
 use broker::*;
 use config::Config;
-use error::SolarResult;
 use kuska_ssb::crypto::{ToSodiumObject, ToSsbId};
 use storage::blob::BlobStorage;
 use storage::kv::KvStorage;
@@ -71,8 +71,7 @@ pub static BLOB_STORAGE: Lazy<Arc<RwLock<BlobStorage>>> =
 pub static CONFIG: OnceCell<Config> = OnceCell::new();
 
 #[async_std::main]
-async fn main() -> SolarResult<()> {
-
+async fn main() -> Result<()> {
     let opt = Opt::from_args();
 
     println!("🌞 Solar {}", env!("SOLAR_VERSION"));
@@ -81,7 +80,7 @@ async fn main() -> SolarResult<()> {
         .data
         .unwrap_or(xdg::BaseDirectories::new()?.create_data_directory("solar")?);
 
-        let rpc_port = opt.port.unwrap_or(RPC_PORT);
+    let rpc_port = opt.port.unwrap_or(RPC_PORT);
     let lan_discovery = opt.lan.unwrap_or(false);
     let listen = format!("0.0.0.0:{}", rpc_port);
     let sensor = opt.sensor.unwrap_or(false);

@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
-use crate::error::SolarResult;
+use anyhow::Result;
 
 #[derive(Debug)]
 pub struct Void {}
@@ -92,7 +92,7 @@ impl Broker {
     pub fn take_msgloop(&mut self) -> JoinHandle<()> {
         self.msgloop.take().unwrap()
     }
-    pub async fn register(&mut self, name: &str, msg_notify: bool) -> SolarResult<ActorEndpoint> {
+    pub async fn register(&mut self, name: &str, msg_notify: bool) -> Result<ActorEndpoint> {
         self.last_actor_id += 1;
 
         trace!(target:"solar-actor","registering actor {}={}", self.last_actor_id, name);
@@ -134,7 +134,7 @@ impl Broker {
 
     pub fn spawn<F>(fut: F) -> task::JoinHandle<()>
     where
-        F: Future<Output = SolarResult<()>> + Send + 'static,
+        F: Future<Output = Result<()>> + Send + 'static,
     {
         task::spawn(async move {
             if let Err(e) = fut.await {

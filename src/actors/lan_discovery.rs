@@ -8,9 +8,9 @@ use futures::FutureExt;
 use kuska_ssb::{discovery::LanBroadcast, keystore::OwnedIdentity};
 
 use crate::broker::*;
-use crate::error::SolarResult;
+use anyhow::Result;
 
-pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> SolarResult<()> {
+pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> Result<()> {
     let broadcaster = LanBroadcast::new(&server_id.pk, rpc_port).await?;
 
     let broker = BROKER.lock().await.register("lan_discover", false).await?;
@@ -38,7 +38,7 @@ pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> SolarResult<()> {
     let _ = broker.ch_terminated.send(Void {});
     Ok(())
 }
-async fn process_broadcast(server_id: &OwnedIdentity, buff: &[u8]) -> SolarResult<()> {
+async fn process_broadcast(server_id: &OwnedIdentity, buff: &[u8]) -> Result<()> {
     let msg = String::from_utf8_lossy(buff);
 
     if let Some((server, port, peer_pk)) = LanBroadcast::parse(&msg) {
