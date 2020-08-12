@@ -13,9 +13,7 @@ extern crate serde;
 extern crate anyhow;
 extern crate toml;
 
-use async_std::fs::File;
-use async_std::io::ReadExt;
-use async_std::prelude::*;
+use async_std::{fs::File, io::ReadExt, prelude::*};
 
 use async_std::sync::{Arc, RwLock};
 use once_cell::sync::{Lazy, OnceCell};
@@ -59,8 +57,7 @@ use anyhow::Result;
 use broker::*;
 use config::Config;
 use kuska_ssb::crypto::{ToSodiumObject, ToSsbId};
-use storage::blob::BlobStorage;
-use storage::kv::KvStorage;
+use storage::{blob::BlobStorage, kv::KvStorage};
 
 const RPC_PORT: u16 = 8008;
 

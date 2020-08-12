@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::string::ToString;
+use std::{collections::HashMap, marker::PhantomData, string::ToString};
 
 use crate::futures::SinkExt;
 use async_std::io::Write;
@@ -16,11 +14,11 @@ use kuska_ssb::{
 use once_cell::sync::Lazy;
 
 use super::{RpcHandler, RpcInput};
-use crate::broker::ChBrokerSend;
-use crate::broker::{BrokerEvent, Destination};
-use crate::storage::kv::StoKvEvent;
-use crate::CONFIG;
-use crate::{BLOB_STORAGE, KV_STORAGE};
+use crate::{
+    broker::{BrokerEvent, ChBrokerSend, Destination},
+    storage::kv::StoKvEvent,
+    BLOB_STORAGE, CONFIG, KV_STORAGE,
+};
 use anyhow::Result;
 
 pub static BLOB_REGEX: Lazy<Regex> =

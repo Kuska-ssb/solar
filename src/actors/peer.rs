@@ -1,6 +1,5 @@
 use once_cell::sync::Lazy;
-use std::collections::HashSet;
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use async_std::{
     io::{Read, Write},

@@ -1,8 +1,10 @@
 #![allow(clippy::single_match)]
 
 use async_std::io::Write;
-use std::collections::{HashMap, HashSet};
-use std::marker::PhantomData;
+use std::{
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 
 use async_trait::async_trait;
 use kuska_ssb::{
@@ -11,9 +13,7 @@ use kuska_ssb::{
 };
 
 use super::{RpcHandler, RpcInput};
-use crate::broker::ChBrokerSend;
-use crate::storage::blob::ToBlobHashId;
-use crate::BLOB_STORAGE;
+use crate::{broker::ChBrokerSend, storage::blob::ToBlobHashId, BLOB_STORAGE};
 use anyhow::Result;
 
 pub enum RpcBlobsGetEvent {

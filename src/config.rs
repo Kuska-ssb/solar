@@ -1,7 +1,8 @@
 use anyhow::Result;
-use kuska_ssb::crypto::ToSodiumObject;
-use kuska_ssb::crypto::ToSsbId;
-use kuska_ssb::keystore::OwnedIdentity;
+use kuska_ssb::{
+    crypto::{ToSodiumObject, ToSsbId},
+    keystore::OwnedIdentity,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {

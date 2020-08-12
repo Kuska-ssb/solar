@@ -1,10 +1,10 @@
 use crate::broker::{BrokerEvent, ChBrokerSend, Destination};
-use sha2::Digest;
-use sha2::Sha256;
-use std::fs::File;
-use std::io::Result;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use sha2::{Digest, Sha256};
+use std::{
+    fs::File,
+    io::{Read, Result, Write},
+    path::{Path, PathBuf},
+};
 
 use futures::SinkExt;
 

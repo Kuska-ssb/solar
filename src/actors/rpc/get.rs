@@ -7,8 +7,7 @@ use kuska_ssb::{
     rpc,
 };
 
-use crate::broker::ChBrokerSend;
-use crate::KV_STORAGE;
+use crate::{broker::ChBrokerSend, KV_STORAGE};
 use anyhow::Result;
 
 use super::{RpcHandler, RpcInput};

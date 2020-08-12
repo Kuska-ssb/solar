@@ -1,6 +1,4 @@
-use std::fs::File;
-use std::io::Read;
-use std::time::Duration;
+use std::{fs::File, io::Read, time::Duration};
 
 use async_std::task;
 use futures::FutureExt;
@@ -9,8 +7,7 @@ use slice_deque::SliceDeque;
 
 use kuska_ssb::{api::dto::content::Post, feed::Message, keystore::OwnedIdentity};
 
-use crate::broker::*;
-use crate::{BLOB_STORAGE, KV_STORAGE};
+use crate::{broker::*, BLOB_STORAGE, KV_STORAGE};
 use anyhow::Result;
 
 pub async fn actor(server_id: OwnedIdentity) -> Result<()> {

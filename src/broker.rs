@@ -5,7 +5,10 @@ use async_std::{
     task::JoinHandle,
 };
 use core::any::Any;
-use futures::{channel::mpsc, channel::oneshot, FutureExt, SinkExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    FutureExt, SinkExt,
+};
 
 use once_cell::sync::Lazy;
 
