@@ -100,11 +100,11 @@ async fn main() -> Result<()> {
     let mut config = if !key_file.is_file() {
         println!("Private key not found, generated new one in {:?}", key_file);
         let config = Config::create();
-        let mut file = File::create(key_file).await?;
+        let mut file = File::create(&key_file).await?;
         file.write_all(&config.to_toml()?).await?;
         config
     } else {
-        let mut file = File::open(key_file).await?;
+        let mut file = File::open(&key_file).await?;
         let mut raw: Vec<u8> = Vec::new();
         file.read_to_end(&mut raw).await?;
         Config::from_toml(&raw)?
@@ -133,13 +133,19 @@ async fn main() -> Result<()> {
         for friend in friends.split(',') {
             if friend == "connect" {
                 for conn in &connects {
-                    config.friends.push(format!("@{}", conn.2.to_ssb_id()));
+                    let conn_id = format!("@{}", conn.2.to_ssb_id());
+                    if !config.friends.contains(&conn_id) {
+                        config.friends.push(conn_id);
+                    }
                 }
-            } else {
+            } else if !config.friends.contains(&friend.to_string()) {
                 config.friends.push(friend.to_string())
             }
         }
+        let mut file = File::create(key_file).await?;
+        file.write_all(&config.to_toml()?).await?;
     }
+
     debug!(target:"solar", "friends are {:?}",config.friends);
     let owned_id = config.owned_identity()?;
     let _err = CONFIG.set(config);
