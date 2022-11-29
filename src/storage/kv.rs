@@ -14,6 +14,7 @@ pub enum StoKvEvent {
     IdChanged(String),
 }
 
+#[derive(Default)]
 pub struct KvStorage {
     db: Option<sled::Db>,
     ch_broker: Option<ChBrokerSend>,
@@ -66,15 +67,6 @@ impl From<serde_cbor::Error> for Error {
 impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl Default for KvStorage {
-    fn default() -> Self {
-        Self {
-            db: None,
-            ch_broker: None,
-        }
-    }
-}
-
 impl KvStorage {
     pub fn open(&mut self, path: &std::path::Path, ch_broker: ChBrokerSend) -> Result<()> {
         self.db = Some(sled::open(path)?);
@@ -85,7 +77,7 @@ impl KvStorage {
     pub fn get_last_feed_no(&self, user_id: &str) -> Result<Option<u64>> {
         let db = self.db.as_ref().unwrap();
         let key = Self::key_lastfeed(user_id);
-        let count = if let Some(value) = db.get(&key)?.map(|v| v) {
+        let count = if let Some(value) = db.get(&key)? {
             let mut u64_buffer = [0u8; 8];
             u64_buffer.copy_from_slice(&value);
             Some(u64::from_be_bytes(u64_buffer))
@@ -168,7 +160,7 @@ impl KvStorage {
     pub fn get_message(&self, msg_id: &str) -> Result<Option<Message>> {
         let db = self.db.as_ref().unwrap();
 
-        if let Some(raw) = db.get(Self::key_message(&msg_id))? {
+        if let Some(raw) = db.get(Self::key_message(msg_id))? {
             let feed_ref = serde_cbor::from_slice::<FeedRef>(&raw)?;
             let msg = self
                 .get_feed(&feed_ref.author, feed_ref.seq_no)?

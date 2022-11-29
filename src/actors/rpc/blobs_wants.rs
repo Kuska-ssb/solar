@@ -157,13 +157,13 @@ where
                 if let Some(wants_event) = msg.downcast_ref::<RpcBlobsWantsEvent>() {
                     match wants_event {
                         RpcBlobsWantsEvent::BroadcastWants(ids) => {
-                            return self.event_wants_broadcast(api, &ids).await
+                            return self.event_wants_broadcast(api, ids).await
                         }
                     }
                 } else if let Some(stoblob_event) = msg.downcast_ref::<StoBlobEvent>() {
                     match stoblob_event {
                         StoBlobEvent::Added(blob_id) => {
-                            return self.event_stoblob_added(api, &blob_id).await
+                            return self.event_stoblob_added(api, blob_id).await
                         }
                     }
                 }

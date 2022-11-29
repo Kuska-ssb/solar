@@ -27,7 +27,7 @@ pub type ChSigRecv = oneshot::Receiver<Void>;
 pub type ChMsgSend = mpsc::UnboundedSender<BrokerMessage>;
 pub type ChMsgRecv = mpsc::UnboundedReceiver<BrokerMessage>;
 
-#[derive(PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug)]
 pub enum Destination {
     Actor(usize),
     Broadcast,

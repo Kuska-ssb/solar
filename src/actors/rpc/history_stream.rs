@@ -67,7 +67,7 @@ where
                 }
             }
             RpcInput::Network(req_no, rpc::RecvMsg::RpcResponse(_type, res)) => {
-                self.recv_rpc_response(api, ch_broker, *req_no, &res).await
+                self.recv_rpc_response(api, ch_broker, *req_no, res).await
             }
             RpcInput::Network(req_no, rpc::RecvMsg::CancelStreamRespose()) => {
                 self.recv_cancelstream(api, *req_no).await
@@ -112,7 +112,7 @@ where
             let _ = api.create_history_stream_req_send(&args).await?;
             for friend in &CONFIG.get().unwrap().friends {
                 let mut args = dto::CreateHistoryStreamIn::new(friend.to_string()).live(true);
-                if let Some(last_feed) = KV_STORAGE.read().await.get_last_feed_no(&friend)? {
+                if let Some(last_feed) = KV_STORAGE.read().await.get_last_feed_no(friend)? {
                     args = args.after_seq(last_feed);
                 }
                 let id = api.create_history_stream_req_send(&args).await?;

@@ -68,7 +68,7 @@ where
                 return self.recv_cancelstream(api, *req_no).await;
             }
             RpcInput::Network(req_no, rpc::RecvMsg::RpcResponse(_type, res)) => {
-                return self.recv_rpc_response(api, *req_no, &res).await;
+                return self.recv_rpc_response(api, *req_no, res).await;
             }
             RpcInput::Message(msg) => {
                 if let Some(get_event) = msg.downcast_ref::<RpcBlobsGetEvent>() {
