@@ -1,0 +1,31 @@
+
+
+[ phase 1: leaner and cleaner ]
+
+ - easy wins first
+   - bump deps
+	 - handle compiler warnings
+	 - handle clippy warnings
+	 - remove sensor code
+	 - remove plotting dep
+
+ - custom error type
+   - remove anyhow and thiserror deps
+	 - implement error type
+	 - implement result type
+
+ - replace env_logger with lighter option
+
+ - replace serde with nanoserde or miniserde
+   - eventually, replace in kuska-ssb too
+
+error inspiration:
+
+https://github.com/xvxx/vial/blob/master/src/error.rs
+https://github.com/xvxx/vial/blob/master/src/lib.rs#L241
+
+[ phase 2: move relevant code to new workspace ]
+
+[ phase 3: write connection handler ]
+
+[ phase 4: write ebt replication ]
