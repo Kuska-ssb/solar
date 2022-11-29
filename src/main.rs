@@ -110,15 +110,15 @@ async fn main() -> Result<()> {
             let invalid_peer_msg = || format!("invalid peer {}", peer);
             let parts = peer.split(':').collect::<Vec<&str>>();
             if parts.len() != 3 {
-                panic!(invalid_peer_msg());
+                panic!("{}", invalid_peer_msg());
             }
             let server = parts[0].to_string();
             let port = parts[1]
                 .parse::<u32>()
-                .unwrap_or_else(|_| panic!(invalid_peer_msg()));
+                .unwrap_or_else(|_| panic!("{}", invalid_peer_msg()));
             let peer_pk = parts[2]
                 .to_ed25519_pk_no_suffix()
-                .unwrap_or_else(|_| panic!(invalid_peer_msg()));
+                .unwrap_or_else(|_| panic!("{}", invalid_peer_msg()));
             connects.push((server, port, peer_pk));
         }
     }

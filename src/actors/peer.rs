@@ -155,7 +155,7 @@ async fn peer_loop<R: Read + Unpin + Send + Sync, W: Write + Unpin + Send + Sync
 
     loop {
         let input = select_biased! {
-          value = ch_terminate_fuse =>  {
+          _value = ch_terminate_fuse =>  {
             break;
           },
           packet = rpc_recv_stream.select_next_some() => {
