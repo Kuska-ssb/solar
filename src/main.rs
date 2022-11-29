@@ -4,7 +4,6 @@
 extern crate futures;
 #[macro_use]
 extern crate log;
-extern crate plotters;
 extern crate procfs;
 extern crate sha2;
 extern crate slice_deque;
@@ -42,10 +41,6 @@ struct Opt {
     /// Run lan discovery
     #[structopt(short, long)]
     lan: Option<bool>,
-
-    /// Run sensor
-    #[structopt(short, long)]
-    sensor: Option<bool>,
 }
 
 mod actors;
@@ -80,7 +75,6 @@ async fn main() -> Result<()> {
     let rpc_port = opt.port.unwrap_or(RPC_PORT);
     let lan_discovery = opt.lan.unwrap_or(false);
     let listen = format!("0.0.0.0:{}", rpc_port);
-    let sensor = opt.sensor.unwrap_or(false);
 
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
@@ -161,10 +155,6 @@ async fn main() -> Result<()> {
         .open(blobs_folder, BROKER.lock().await.create_sender());
 
     Broker::spawn(actors::ctrlc::actor());
-
-    if sensor {
-        Broker::spawn(actors::sensor::actor(owned_id.clone()));
-    }
 
     Broker::spawn(actors::tcp_server::actor(owned_id.clone(), listen));
     if lan_discovery {
