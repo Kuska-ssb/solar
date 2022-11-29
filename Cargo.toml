@@ -10,7 +10,6 @@ build = "build.rs"
 name = "solar"
 path = "src/main.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 kuska-ssb = { git =  "https://github.com/Kuska-ssb/ssb", branch = "master" }
 async-std = { version = "1", features=["unstable","attributes"] }
