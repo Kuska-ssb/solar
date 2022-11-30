@@ -36,12 +36,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.66"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
-
-[[package]]
 name = "async-attributes"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -901,7 +895,6 @@ dependencies = [
 [[package]]
 name = "kuska-ssb"
 version = "0.4.1"
-source = "git+https://github.com/Kuska-ssb/ssb?branch=master#0ba96450567f597a5642a23b85a0e08df4c7cab0"
 dependencies = [
  "async-std",
  "async-stream",
@@ -1503,7 +1496,6 @@ dependencies = [
 name = "solar"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "async-ctrlc",
  "async-std",
  "async-trait",
@@ -1525,7 +1517,6 @@ dependencies = [
  "snap",
  "structopt",
  "tempdir",
- "thiserror",
  "toml",
  "xdg",
 ]

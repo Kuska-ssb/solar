@@ -7,8 +7,7 @@ use futures::FutureExt;
 
 use kuska_ssb::keystore::OwnedIdentity;
 
-use crate::broker::*;
-use anyhow::Result;
+use crate::{broker::*, Result};
 
 pub async fn actor(server_id: OwnedIdentity, addr: impl ToSocketAddrs) -> Result<()> {
     let broker = BROKER.lock().await.register("sbot-listener", false).await?;

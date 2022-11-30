@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
-use anyhow::Result;
+use crate::Result;
 
 #[derive(Debug)]
 pub struct Void {}

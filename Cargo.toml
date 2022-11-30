@@ -11,7 +11,8 @@ name = "solar"
 path = "src/main.rs"
 
 [dependencies]
-kuska-ssb = { git =  "https://github.com/Kuska-ssb/ssb", branch = "master" }
+#kuska-ssb = { git =  "https://github.com/Kuska-ssb/ssb", branch = "master" }
+kuska-ssb = { path =  "../kuska-ssb" }
 async-std = { version = "1", features=["unstable","attributes"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
@@ -20,7 +21,6 @@ serde_cbor = "0.11"
 tempdir = "0.3"
 log = "0.4"
 env_logger = "0.7"
-thiserror = "1"
 async-ctrlc = "1"
 snap = "1"
 rand = "0.7"
@@ -35,4 +35,3 @@ slice-deque = "0.3"
 toml = "0.5"
 regex = "1"
 structopt = "0.3"
-anyhow = "1"

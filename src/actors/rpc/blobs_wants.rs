@@ -13,9 +13,8 @@ use kuska_ssb::{
 use crate::{
     broker::ChBrokerSend,
     storage::blob::{StoBlobEvent, ToBlobHashId},
-    BLOB_STORAGE,
+    Result, BLOB_STORAGE,
 };
-use anyhow::Result;
 
 use super::{RpcHandler, RpcInput};
 use crate::broker::{BrokerEvent, Destination};

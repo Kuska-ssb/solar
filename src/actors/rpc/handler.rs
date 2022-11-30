@@ -1,7 +1,9 @@
 use async_std::io::Write;
 
-use crate::broker::{BrokerMessage, ChBrokerSend};
-use anyhow::Result;
+use crate::{
+    broker::{BrokerMessage, ChBrokerSend},
+    Result,
+};
 use async_trait::async_trait;
 use kuska_ssb::{api::ApiCaller, rpc::RecvMsg};
 

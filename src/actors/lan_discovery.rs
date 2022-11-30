@@ -7,8 +7,7 @@ use futures::FutureExt;
 
 use kuska_ssb::{discovery::LanBroadcast, keystore::OwnedIdentity};
 
-use crate::broker::*;
-use anyhow::Result;
+use crate::{broker::*, Result};
 
 pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> Result<()> {
     let broadcaster = LanBroadcast::new(&server_id.pk, rpc_port).await?;

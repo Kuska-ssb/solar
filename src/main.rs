@@ -9,7 +9,6 @@ extern crate sha2;
 extern crate slice_deque;
 #[macro_use]
 extern crate serde;
-extern crate anyhow;
 extern crate toml;
 
 use async_std::{fs::File, io::ReadExt, prelude::*};
@@ -46,13 +45,16 @@ struct Opt {
 mod actors;
 mod broker;
 mod config;
+mod error;
 mod storage;
 
-use anyhow::Result;
 use broker::*;
 use config::Config;
 use kuska_ssb::crypto::{ToSodiumObject, ToSsbId};
 use storage::{blob::BlobStorage, kv::KvStorage};
+
+/// Convenience Result that returns `solar::Error`.
+pub type Result<T> = std::result::Result<T, error::Error>;
 
 const RPC_PORT: u16 = 8008;
 

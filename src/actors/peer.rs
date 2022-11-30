@@ -23,8 +23,7 @@ use kuska_ssb::{
     rpc::{RpcReader, RpcWriter},
 };
 
-use crate::broker::*;
-use anyhow::Result;
+use crate::{broker::*, Result};
 
 use super::rpc::{
     BlobsGetHandler, BlobsWantsHandler, GetHandler, HistoryStreamHandler, RpcHandler, RpcInput,

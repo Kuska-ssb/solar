@@ -3,16 +3,17 @@
 [ phase 1: leaner and cleaner ]
 
  - easy wins first
-   - bump deps
-	 - handle compiler warnings
-	 - handle clippy warnings
-	 - remove sensor code
-	 - remove plotting dep
+   x bump deps
+	 x handle compiler warnings
+	 x handle clippy warnings
+	 x remove sensor code
+	 x remove plotting dep
 
  - custom error type
-   - remove anyhow and thiserror deps
-	 - implement error type
-	 - implement result type
+   x remove anyhow and thiserror deps
+	 x implement error type
+	 x implement result type
+   / implement From for each variant
 
  - replace env_logger with lighter option
 

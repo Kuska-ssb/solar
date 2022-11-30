@@ -13,8 +13,7 @@ use kuska_ssb::{
 };
 
 use super::{RpcHandler, RpcInput};
-use crate::{broker::ChBrokerSend, storage::blob::ToBlobHashId, BLOB_STORAGE};
-use anyhow::Result;
+use crate::{broker::ChBrokerSend, storage::blob::ToBlobHashId, Result, BLOB_STORAGE};
 
 pub enum RpcBlobsGetEvent {
     Get(dto::BlobsGetIn),

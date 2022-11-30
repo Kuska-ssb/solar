@@ -17,9 +17,8 @@ use super::{RpcHandler, RpcInput};
 use crate::{
     broker::{BrokerEvent, ChBrokerSend, Destination},
     storage::kv::StoKvEvent,
-    BLOB_STORAGE, CONFIG, KV_STORAGE,
+    Result, BLOB_STORAGE, CONFIG, KV_STORAGE,
 };
-use anyhow::Result;
 
 pub static BLOB_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(&[0-9A-Za-z/+=]*.sha256)").unwrap());
@@ -126,8 +125,7 @@ where
 
     fn extract_blob_refs(&mut self, msg: &Message) -> Vec<String> {
         let mut refs = Vec::new();
-        let msg: Result<dto::content::TypedMessage, _> =
-            serde_json::from_value(msg.content().clone());
+        let msg = serde_json::from_value(msg.content().clone());
         if let Ok(dto::content::TypedMessage::Post { text, .. }) = msg {
             for cap in BLOB_REGEX.captures_iter(&text) {
                 let key = cap.get(0).unwrap().as_str().to_owned();
