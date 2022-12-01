@@ -25,8 +25,8 @@ pub trait ToBlobHashId {
 impl ToBlobHashId for &[u8] {
     fn blob_hash_id(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.input(self);
-        format!("&{}.sha256", base64::encode(&hasher.result()))
+        hasher.update(self);
+        format!("&{}.sha256", base64::encode(&hasher.finalize()))
     }
 }
 
