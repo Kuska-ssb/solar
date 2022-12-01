@@ -75,7 +75,7 @@ pub async fn actor_inner(id: OwnedIdentity, connect: Connect) -> Result<()> {
                 return Ok(());
             }
             info!(
-                "💃 recieved connection from peer {}",
+                "💃 received connection from peer {}",
                 handshake.peer_pk.to_ssb_id()
             );
 
