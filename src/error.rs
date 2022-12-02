@@ -1,7 +1,6 @@
 use std::{error::Error as ErrorTrait, fmt, io};
 
 use kuska_ssb::{api, crypto, discovery, feed, handshake, rpc};
-use serde_json;
 use toml::{de, ser};
 
 use crate::storage::kv;
