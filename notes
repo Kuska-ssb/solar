@@ -1,0 +1,40 @@
+
+
+[ phase 1: leaner and cleaner ]
+
+ - easy wins first
+   x bump deps
+	 x handle compiler warnings
+	 x handle clippy warnings
+	 x remove sensor code
+	 x remove plotting dep
+
+ x custom error type
+   x remove anyhow and thiserror deps
+	 x implement error type
+	 x implement result type
+   x implement From for each variant
+
+ x remove ci (annoying for now)
+
+-----
+
+ nice to haves...
+
+ - replace serde with nanoserde or miniserde
+   - eventually, replace in kuska-ssb too
+
+error inspiration:
+
+https://github.com/xvxx/vial/blob/master/src/error.rs
+https://github.com/xvxx/vial/blob/master/src/lib.rs#L241
+
+[ phase 2: move relevant code to new workspace ]
+
+ - might be time to create a workspace
+   - start working on the connection scheduler
+   - or replication core
+
+[ phase 3: write connection handler ]
+
+[ phase 4: write ebt replication ]

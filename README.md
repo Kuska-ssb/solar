@@ -2,7 +2,7 @@
 
 ![Rust](https://github.com/Kuska-ssb/solar/workflows/Rust/badge.svg)
 
-The idea behing solar is to enable community hardware devices to speaks [Secure Scuttlebut](https://scuttlebutt.nz/), using the [Kuska](https://github.com/Kuska-ssb) rust libraries and mainly based on [async_std](https://async.rs/)
+The idea behing solar is to enable community hardware devices to speak [Secure Scuttlebutt](https://scuttlebutt.nz/) using the [Kuska](https://github.com/Kuska-ssb) rust libraries, mainly based on [async_std](https://async.rs/).
 
 Current status is:
 

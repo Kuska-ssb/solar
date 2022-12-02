@@ -10,31 +10,27 @@ build = "build.rs"
 name = "solar"
 path = "src/main.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 kuska-ssb = { git =  "https://github.com/Kuska-ssb/ssb", branch = "master" }
-async-std = { version = "1.5.0", features=["unstable","attributes"] }
-futures = "0.3.4"
-serde = { version = "1.0.104", features = ["derive"] }
-serde_json = { version = "1.0.48", features=["preserve_order","arbitrary_precision"] }
-serde_cbor = "0.11.1"
-tempdir = "0.3.7"
-log = "0.4.8"
-env_logger = "0.7.1"
-thiserror = "1.0.11"
-async-ctrlc = "1.0.0"
-snap = "1.0.0"
-rand = "0.7.3"
-sled = "0.31.0"
-xdg = "2.2.0"
-base64 = "0.11.0"
-once_cell = "1.3.1"
-async-trait = "0.1.29"
-sha2 = "0.8.1"
-plotters = "0.2.12"
-procfs = "0.7.8"
-slice-deque = "0.3.0"
-toml = "0.5.6"
-regex = "1.3.7"
-structopt = "0.3.14"
-anyhow = "1.0.32"
+async-std = { version = "1", features=["unstable", "attributes"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features=["preserve_order", "arbitrary_precision"] }
+serde_cbor = "0.11"
+tempdir = "0.3"
+log = "0.4"
+env_logger = "0.10"
+async-ctrlc = "1"
+snap = "1"
+rand = "0.8"
+sled = "0.34"
+xdg = "2.4"
+base64 = "0.13"
+once_cell = "1.16"
+async-trait = "0.1"
+sha2 = "0.10"
+procfs = "0.14"
+slice-deque = "0.3"
+toml = "0.5"
+regex = "1"
+structopt = "0.3"

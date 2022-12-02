@@ -4,20 +4,19 @@
 extern crate futures;
 #[macro_use]
 extern crate log;
-extern crate plotters;
 extern crate procfs;
 extern crate sha2;
 extern crate slice_deque;
 #[macro_use]
 extern crate serde;
-extern crate anyhow;
 extern crate toml;
 
 use async_std::{fs::File, io::ReadExt, prelude::*};
 
 use async_std::sync::{Arc, RwLock};
 use once_cell::sync::{Lazy, OnceCell};
-use std::path::PathBuf;
+use sled::Config as KvConfig;
+use std::{env, path::PathBuf};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -42,22 +41,21 @@ struct Opt {
     /// Run lan discovery
     #[structopt(short, long)]
     lan: Option<bool>,
-
-    /// Run sensor
-    #[structopt(short, long)]
-    sensor: Option<bool>,
 }
 
 mod actors;
 mod broker;
 mod config;
+mod error;
 mod storage;
 
-use anyhow::Result;
 use broker::*;
 use config::Config;
 use kuska_ssb::crypto::{ToSodiumObject, ToSsbId};
 use storage::{blob::BlobStorage, kv::KvStorage};
+
+/// Convenience Result that returns `solar::Error`.
+pub type Result<T> = std::result::Result<T, error::Error>;
 
 const RPC_PORT: u16 = 8008;
 
@@ -80,7 +78,6 @@ async fn main() -> Result<()> {
     let rpc_port = opt.port.unwrap_or(RPC_PORT);
     let lan_discovery = opt.lan.unwrap_or(false);
     let listen = format!("0.0.0.0:{}", rpc_port);
-    let sensor = opt.sensor.unwrap_or(false);
 
     env_logger::init();
     log::set_max_level(log::LevelFilter::max());
@@ -116,15 +113,15 @@ async fn main() -> Result<()> {
             let invalid_peer_msg = || format!("invalid peer {}", peer);
             let parts = peer.split(':').collect::<Vec<&str>>();
             if parts.len() != 3 {
-                panic!(invalid_peer_msg());
+                panic!("{}", invalid_peer_msg());
             }
             let server = parts[0].to_string();
             let port = parts[1]
                 .parse::<u32>()
-                .unwrap_or_else(|_| panic!(invalid_peer_msg()));
+                .unwrap_or_else(|_| panic!("{}", invalid_peer_msg()));
             let peer_pk = parts[2]
                 .to_ed25519_pk_no_suffix()
-                .unwrap_or_else(|_| panic!(invalid_peer_msg()));
+                .unwrap_or_else(|_| panic!("{}", invalid_peer_msg()));
             connects.push((server, port, peer_pk));
         }
     }
@@ -150,10 +147,23 @@ async fn main() -> Result<()> {
         base64::encode(&owned_id.pk[..])
     );
 
+    // Read KV database cache capacity setting from environment variable.
+    // Define default value (1 GB) if env var is unset.
+    // TODO: find a neater way to do this. Consider using config file.
+    let kv_cache_capacity: u64 = match env::var("SLED_CACHE_CAPACITY") {
+        Ok(val) => val.parse().unwrap_or(1000 * 1000 * 1000),
+        Err(_) => 1000 * 1000 * 1000,
+    };
+
+    // Define configuration parameters for KV database (Sled).
+    let kv_storage_config = KvConfig::new()
+        .path(&feeds_folder)
+        .cache_capacity(kv_cache_capacity);
+
     KV_STORAGE
         .write()
         .await
-        .open(&feeds_folder, BROKER.lock().await.create_sender())?;
+        .open(kv_storage_config, BROKER.lock().await.create_sender())?;
 
     BLOB_STORAGE
         .write()
@@ -161,10 +171,6 @@ async fn main() -> Result<()> {
         .open(blobs_folder, BROKER.lock().await.create_sender());
 
     Broker::spawn(actors::ctrlc::actor());
-
-    if sensor {
-        Broker::spawn(actors::sensor::actor(owned_id.clone()));
-    }
 
     Broker::spawn(actors::tcp_server::actor(owned_id.clone(), listen));
     if lan_discovery {

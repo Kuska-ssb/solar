@@ -1,8 +1,7 @@
 use async_ctrlc::CtrlC;
 use futures::SinkExt;
 
-use crate::broker::*;
-use anyhow::Result;
+use crate::{broker::*, Result};
 
 pub async fn actor() -> Result<()> {
     let mut broker = BROKER.lock().await.register("crtlc", false).await?;
