@@ -68,8 +68,8 @@ impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl KvStorage {
-    pub fn open(&mut self, path: &std::path::Path, ch_broker: ChBrokerSend) -> Result<()> {
-        self.db = Some(sled::open(path)?);
+    pub fn open(&mut self, config: sled::Config, ch_broker: ChBrokerSend) -> Result<()> {
+        self.db = Some(config.open()?);
         self.ch_broker = Some(ch_broker);
         Ok(())
     }
