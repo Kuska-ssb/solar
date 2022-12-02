@@ -15,7 +15,8 @@ use async_std::{fs::File, io::ReadExt, prelude::*};
 
 use async_std::sync::{Arc, RwLock};
 use once_cell::sync::{Lazy, OnceCell};
-use std::path::PathBuf;
+use sled::Config as KvConfig;
+use std::{env, path::PathBuf};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -146,10 +147,23 @@ async fn main() -> Result<()> {
         base64::encode(&owned_id.pk[..])
     );
 
+    // Read KV database cache capacity setting from environment variable.
+    // Define default value (1 GB) if env var is unset.
+    // TODO: find a neater way to do this. Consider using config file.
+    let kv_cache_capacity: u64 = match env::var("SLED_CACHE_CAPACITY") {
+        Ok(val) => val.parse().unwrap_or(1000 * 1000 * 1000),
+        Err(_) => 1000 * 1000 * 1000,
+    };
+
+    // Define configuration parameters for KV database (Sled).
+    let kv_storage_config = KvConfig::new()
+        .path(&feeds_folder)
+        .cache_capacity(kv_cache_capacity);
+
     KV_STORAGE
         .write()
         .await
-        .open(&feeds_folder, BROKER.lock().await.create_sender())?;
+        .open(kv_storage_config, BROKER.lock().await.create_sender())?;
 
     BLOB_STORAGE
         .write()
