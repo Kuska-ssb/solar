@@ -1,4 +1,4 @@
-use std::{error::Error as ErrorTrait, fmt, io};
+use std::{error::Error as ErrorTrait, fmt, io, net};
 
 use kuska_ssb::{api, crypto, discovery, feed, handshake, rpc};
 use toml::{de, ser};
@@ -8,12 +8,16 @@ use crate::storage::kv;
 /// Possible solar errors.
 #[derive(Debug)]
 pub enum Error {
+    /// IP address parsing error.
+    AddrParse(net::AddrParseError),
     /// xdg::BaseDirectoriesError.
     BaseDirectories(xdg::BaseDirectoriesError),
     /// Failed to deserialization TOML.
     DeserializeToml(de::Error),
     /// io::Error.
     IO(io::Error),
+    /// JSON-RPC server error.
+    JsonRpc(jsonrpc_ws_server::Error),
     /// SSB API error.
     KuskaApi(api::Error),
     /// SSB cryptograpy error.
@@ -45,6 +49,12 @@ impl ErrorTrait for Error {
     }
 }
 
+impl From<net::AddrParseError> for Error {
+    fn from(err: net::AddrParseError) -> Error {
+        Error::AddrParse(err)
+    }
+}
+
 impl From<xdg::BaseDirectoriesError> for Error {
     fn from(err: xdg::BaseDirectoriesError) -> Error {
         Error::BaseDirectories(err)
@@ -54,6 +64,12 @@ impl From<xdg::BaseDirectoriesError> for Error {
 impl From<de::Error> for Error {
     fn from(err: de::Error) -> Error {
         Error::DeserializeToml(err)
+    }
+}
+
+impl From<jsonrpc_ws_server::Error> for Error {
+    fn from(err: jsonrpc_ws_server::Error) -> Error {
+        Error::JsonRpc(err)
     }
 }
 
@@ -123,9 +139,11 @@ impl fmt::Display for Error {
             f,
             "{}",
             match self {
+                Error::AddrParse(err) => format!("{}", err),
                 Error::BaseDirectories(err) => format!("{}", err),
                 Error::DeserializeToml(err) => format!("{}", err),
                 Error::IO(err) => format!("{}", err),
+                Error::JsonRpc(err) => format!("{}", err),
                 Error::KuskaApi(err) => format!("{}", err),
                 Error::KuskaCrypto(err) => format!("{}", err),
                 Error::KuskaDiscovery(err) => format!("{}", err),

@@ -58,6 +58,7 @@ use storage::{blob::BlobStorage, kv::KvStorage};
 pub type Result<T> = std::result::Result<T, error::Error>;
 
 const RPC_PORT: u16 = 8008;
+const JSON_RPC_PORT: u16 = 3030;
 
 pub static KV_STORAGE: Lazy<Arc<RwLock<KvStorage>>> =
     Lazy::new(|| Arc::new(RwLock::new(KvStorage::default())));
@@ -171,8 +172,12 @@ async fn main() -> Result<()> {
         .open(blobs_folder, BROKER.lock().await.create_sender());
 
     Broker::spawn(actors::ctrlc::actor());
-
     Broker::spawn(actors::tcp_server::actor(owned_id.clone(), listen));
+    Broker::spawn(actors::jsonrpc_server::actor(
+        owned_id.clone(),
+        JSON_RPC_PORT,
+    ));
+
     if lan_discovery {
         Broker::spawn(actors::lan_discovery::actor(owned_id.clone(), RPC_PORT));
     }
