@@ -138,7 +138,7 @@ async fn main() -> Result<()> {
             }
         }
     }
-    debug!(target:"solar", "friends are {:?}",config.friends);
+    debug!(target:"solar", "friends are {:?}", config.friends);
     let owned_id = config.owned_identity()?;
     let _err = CONFIG.set(config);
 
