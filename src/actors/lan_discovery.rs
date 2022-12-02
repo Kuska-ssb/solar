@@ -24,7 +24,7 @@ pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> Result<()> {
             _ = ch_terminate => break,
             recv = socket.recv_from(&mut buf).fuse() => {
                 if let Ok((amt, _)) = recv {
-                    if let Err(err) = process_broadcast(&server_id,&buf[..amt]).await {
+                    if let Err(err) = process_broadcast(&server_id, &buf[..amt]).await {
                         warn!("failed to process broadcast: {:?}",err);
                     }
                 }
@@ -38,19 +38,26 @@ pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> Result<()> {
     Ok(())
 }
 async fn process_broadcast(server_id: &OwnedIdentity, buff: &[u8]) -> Result<()> {
+    // Parse the broadcast message to string.
     let msg = String::from_utf8_lossy(buff);
 
-    if let Some((server, port, peer_pk)) = LanBroadcast::parse(&msg) {
-        Broker::spawn(super::peer::actor(
-            server_id.clone(),
-            super::peer::Connect::TcpServer {
-                server,
-                port,
-                peer_pk,
-            },
-        ));
-    } else {
-        warn!("failed to parse broadcast {}", msg);
+    // Split and collect the multiserver addresses from the broadcast message.
+    // One string may include several addresses, such as `net` and `wss`.
+    let addresses: Vec<&str> = msg.split(';').collect();
+
+    for address in addresses {
+        if let Some((server, port, peer_pk)) = LanBroadcast::parse(address) {
+            Broker::spawn(super::peer::actor(
+                server_id.clone(),
+                super::peer::Connect::TcpServer {
+                    server,
+                    port,
+                    peer_pk,
+                },
+            ));
+        } else {
+            warn!("failed to parse broadcast {}", address);
+        }
     }
 
     Ok(())
