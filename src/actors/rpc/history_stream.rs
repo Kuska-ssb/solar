@@ -7,7 +7,7 @@ use regex::Regex;
 
 use kuska_ssb::{
     api::{dto, ApiCaller, ApiMethod},
-    feed::{Feed, Message},
+    feed::Message,
     rpc,
 };
 
@@ -143,7 +143,7 @@ where
         res: &[u8],
     ) -> Result<bool> {
         if self.friends.contains_key(&req_no) {
-            let msg = Feed::from_slice(res)?.into_message()?;
+            let msg = Message::from_slice(res)?;
             let last_feed = KV_STORAGE
                 .read()
                 .await
