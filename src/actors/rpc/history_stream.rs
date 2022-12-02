@@ -151,7 +151,7 @@ where
                 .unwrap_or(0);
             if msg.sequence() == last_feed + 1 {
                 KV_STORAGE.write().await.append_feed(msg.clone()).await?;
-                info!("Recieved {} msg no {}", msg.author(), msg.sequence());
+                info!("Received {} msg no {}", msg.author(), msg.sequence());
                 for key in self.extract_blob_refs(&msg) {
                     if !BLOB_STORAGE.read().await.exists(&key) {
                         let event = super::blobs_get::RpcBlobsGetEvent::Get(dto::BlobsGetIn {
@@ -165,7 +165,7 @@ where
                 }
             } else {
                 warn!(
-                    "Recieved message out of order {} recv:{} db:{}",
+                    "Received message out of order {} recv:{} db:{}",
                     &msg.author().to_string(),
                     msg.sequence(),
                     last_feed
@@ -179,6 +179,7 @@ where
 
     async fn recv_createhistorystream(
         &mut self,
+
         api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,

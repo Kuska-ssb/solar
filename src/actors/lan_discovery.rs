@@ -25,7 +25,7 @@ pub async fn actor(server_id: OwnedIdentity, rpc_port: u16) -> Result<()> {
             recv = socket.recv_from(&mut buf).fuse() => {
                 if let Ok((amt, _)) = recv {
                     if let Err(err) = process_broadcast(&server_id,&buf[..amt]).await {
-                        warn!("failed to process brodcast: {:?}",err);
+                        warn!("failed to process broadcast: {:?}",err);
                     }
                 }
             }
