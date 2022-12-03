@@ -17,24 +17,57 @@
 
  x remove ci (annoying for now)
 
+[ phase 2: improve docs & deepen understanding ]
+
+ - let's really understand this thing deeply before adding more to it
+ - still need to do a lot of documenting
+   - work through these files first and document for clarity of understanding
+     - src/actors/rpc/history_stream.rs
+     - src/storage/kv.rs
+
+[ phase 3: write connection handler ]
+
+ - first we need to store public keys of feeds we wish to replicate
+   - this is currently stored in `solar.toml` as "friends"
+   - might be good to split into `secret.toml` and `replicate.toml`
+     - later we might move the content of `replicate.toml` into a kv
+       - then we can track things like 'last replication event with xyz peer'
+   - expose the ability to read and update `replicate.toml` via jsonrpc
+ - conn-db
+   - write a minimal api to open and update a kv store
+     - consider basing it on rust HashMap interface or sled api (BTreeMap)
+   - based on ssb-conn-db
+
+[ phase 4: write ebt replication ]
+
 -----
 
- nice to haves...
+[ brainstorm ]
+
+ - ability to pause replication
+   - expose methods via jsonrpc server
+   - add an additional match to the select! loop in src/actors/peer.rs
+   - maybe track state in a separate actor (state machine)
+   - this also opens the door to schedule replication
+ - get list of feeds from the main kv database
+   - `get_peers`
+   - whose logs do we hold?
+   - should match the friends list
+
+-----
+
+[ nice to haves... ]
 
  - replace serde with nanoserde or miniserde
    - eventually, replace in kuska-ssb too
+
+[ links ]
 
 error inspiration:
 
 https://github.com/xvxx/vial/blob/master/src/error.rs
 https://github.com/xvxx/vial/blob/master/src/lib.rs#L241
 
-[ phase 2: move relevant code to new workspace ]
+ssb-conn-db:
 
- - might be time to create a workspace
-   - start working on the connection scheduler
-   - or replication core
-
-[ phase 3: write connection handler ]
-
-[ phase 4: write ebt replication ]
+https://github.com/ssbc/ssb-conn-db
