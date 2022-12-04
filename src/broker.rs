@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 
 use std::collections::hash_map::HashMap;
 
-use anyhow::Result;
+use crate::Result;
 
 #[derive(Debug)]
 pub struct Void {}
@@ -27,7 +27,7 @@ pub type ChSigRecv = oneshot::Receiver<Void>;
 pub type ChMsgSend = mpsc::UnboundedSender<BrokerMessage>;
 pub type ChMsgRecv = mpsc::UnboundedReceiver<BrokerMessage>;
 
-#[derive(PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug)]
 pub enum Destination {
     Actor(usize),
     Broadcast,

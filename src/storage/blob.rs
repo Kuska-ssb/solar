@@ -12,18 +12,10 @@ pub enum StoBlobEvent {
     Added(String),
 }
 
+#[derive(Default)]
 pub struct BlobStorage {
     path: Option<PathBuf>,
     ch_broker: Option<ChBrokerSend>,
-}
-
-impl Default for BlobStorage {
-    fn default() -> Self {
-        Self {
-            path: None,
-            ch_broker: None,
-        }
-    }
 }
 
 pub trait ToBlobHashId {
@@ -33,8 +25,8 @@ pub trait ToBlobHashId {
 impl ToBlobHashId for &[u8] {
     fn blob_hash_id(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.input(self);
-        format!("&{}.sha256", base64::encode(&hasher.result()))
+        hasher.update(self);
+        format!("&{}.sha256", base64::encode(&hasher.finalize()))
     }
 }
 
@@ -44,7 +36,7 @@ impl BlobStorage {
         self.ch_broker = Some(ch_broker);
     }
     fn path_of(&self, id: &str) -> PathBuf {
-        let id = id.replace("&", "").replace("/", "_");
+        let id = id.replace('&', "").replace('/', "_");
         [self.path.as_ref().unwrap(), Path::new(&id)]
             .iter()
             .collect()
