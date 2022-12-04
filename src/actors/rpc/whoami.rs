@@ -9,8 +9,7 @@ use kuska_ssb::{
 };
 
 use super::{RpcHandler, RpcInput};
-use crate::broker::ChBrokerSend;
-use anyhow::Result;
+use crate::{broker::ChBrokerSend, Result};
 
 pub struct WhoAmIHandler<'a, W>
 where

@@ -7,7 +7,7 @@ use regex::Regex;
 
 use kuska_ssb::{
     api::{dto, ApiCaller, ApiMethod},
-    feed::{Feed, Message},
+    feed::Message,
     rpc,
 };
 
@@ -17,9 +17,8 @@ use super::{RpcHandler, RpcInput};
 use crate::{
     broker::{BrokerEvent, ChBrokerSend, Destination},
     storage::kv::StoKvEvent,
-    BLOB_STORAGE, CONFIG, KV_STORAGE,
+    Result, BLOB_STORAGE, CONFIG, KV_STORAGE,
 };
-use anyhow::Result;
 
 pub static BLOB_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(&[0-9A-Za-z/+=]*.sha256)").unwrap());
@@ -67,7 +66,7 @@ where
                 }
             }
             RpcInput::Network(req_no, rpc::RecvMsg::RpcResponse(_type, res)) => {
-                self.recv_rpc_response(api, ch_broker, *req_no, &res).await
+                self.recv_rpc_response(api, ch_broker, *req_no, res).await
             }
             RpcInput::Network(req_no, rpc::RecvMsg::CancelStreamRespose()) => {
                 self.recv_cancelstream(api, *req_no).await
@@ -112,7 +111,7 @@ where
             let _ = api.create_history_stream_req_send(&args).await?;
             for friend in &CONFIG.get().unwrap().friends {
                 let mut args = dto::CreateHistoryStreamIn::new(friend.to_string()).live(true);
-                if let Some(last_feed) = KV_STORAGE.read().await.get_last_feed_no(&friend)? {
+                if let Some(last_feed) = KV_STORAGE.read().await.get_last_feed_no(friend)? {
                     args = args.after_seq(last_feed);
                 }
                 let id = api.create_history_stream_req_send(&args).await?;
@@ -126,8 +125,7 @@ where
 
     fn extract_blob_refs(&mut self, msg: &Message) -> Vec<String> {
         let mut refs = Vec::new();
-        let msg: Result<dto::content::TypedMessage, _> =
-            serde_json::from_value(msg.content().clone());
+        let msg = serde_json::from_value(msg.content().clone());
         if let Ok(dto::content::TypedMessage::Post { text, .. }) = msg {
             for cap in BLOB_REGEX.captures_iter(&text) {
                 let key = cap.get(0).unwrap().as_str().to_owned();
@@ -145,7 +143,7 @@ where
         res: &[u8],
     ) -> Result<bool> {
         if self.friends.contains_key(&req_no) {
-            let msg = Feed::from_slice(res)?.into_message()?;
+            let msg = Message::from_slice(res)?;
             let last_feed = KV_STORAGE
                 .read()
                 .await
@@ -153,7 +151,7 @@ where
                 .unwrap_or(0);
             if msg.sequence() == last_feed + 1 {
                 KV_STORAGE.write().await.append_feed(msg.clone()).await?;
-                info!("Recieved {} msg no {}", msg.author(), msg.sequence());
+                info!("Received {} msg no {}", msg.author(), msg.sequence());
                 for key in self.extract_blob_refs(&msg) {
                     if !BLOB_STORAGE.read().await.exists(&key) {
                         let event = super::blobs_get::RpcBlobsGetEvent::Get(dto::BlobsGetIn {
@@ -167,7 +165,7 @@ where
                 }
             } else {
                 warn!(
-                    "Recieved message out of order {} recv:{} db:{}",
+                    "Received message out of order {} recv:{} db:{}",
                     &msg.author().to_string(),
                     msg.sequence(),
                     last_feed
@@ -181,6 +179,7 @@ where
 
     async fn recv_createhistorystream(
         &mut self,
+
         api: &mut ApiCaller<W>,
         req_no: i32,
         req: &rpc::Body,
